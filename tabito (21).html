@@ -1,0 +1,549 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+<title>Tabito — Explorez l'inconnu</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://unpkg.com/@turf/turf@6.5.0/turf.min.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Syne:wght@400;700;800&display=swap" rel="stylesheet" />
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --fog: #e8ecf0;
+    --accent: #2563eb;
+    --accent2: #0ea5e9;
+    --card: rgba(255,255,255,0.92);
+    --text: #1e293b;
+    --muted: #64748b;
+  }
+  html, body { width: 100%; height: 100%; overflow: hidden; background: var(--fog); }
+  #map { width: 100%; height: 100%; }
+
+  /* Logo */
+  #logo { position: absolute; top: 16px; left: 16px; z-index: 1000; pointer-events: none; }
+  #logo h1 { font-family: 'Syne', sans-serif; font-weight: 800; font-size: 1.35rem; color: var(--accent); letter-spacing: 0.04em; line-height: 1; }
+  #logo p { font-family: 'Space Mono', monospace; font-size: 0.62rem; color: var(--muted); letter-spacing: 0.12em; text-transform: uppercase; margin-top: 3px; }
+
+  /* GPS dot */
+  #gps-dot { position: absolute; top: 20px; right: 16px; z-index: 1000; width: 10px; height: 10px; border-radius: 50%; background: var(--muted); }
+  #gps-dot.active { background: var(--accent); animation: pulse-dot 2s infinite; }
+  @keyframes pulse-dot { 0%{box-shadow:0 0 0 0 rgba(37,99,235,0.6)} 70%{box-shadow:0 0 0 8px rgba(200,241,53,0)} 100%{box-shadow:0 0 0 0 rgba(200,241,53,0)} }
+
+  /* Follow button */
+  #follow-btn { position: absolute; bottom: 32px; right: 16px; z-index: 1000; display: flex; align-items: center; gap: 8px; padding: 10px 16px; border-radius: 10px; border: 1px solid rgba(37,99,235,0.25); background: var(--card); color: var(--muted); font-family: 'Space Mono', monospace; font-size: 0.7rem; letter-spacing: 0.08em; cursor: pointer; backdrop-filter: blur(8px); transition: all 0.2s; }
+  #follow-btn.on { border-color: var(--accent); color: var(--accent); }
+
+  /* Stats */
+  #stats { position: absolute; bottom: 32px; left: 16px; z-index: 1000; display: flex; gap: 10px; }
+  .stat-chip { display: flex; flex-direction: column; align-items: center; padding: 8px 14px; border-radius: 10px; border: 1px solid rgba(0,0,0,0.08); background: var(--card); backdrop-filter: blur(8px); }
+  .stat-val { font-family: 'Syne', sans-serif; font-weight: 700; font-size: 1.05rem; color: var(--text); line-height: 1; }
+  .stat-lbl { font-family: 'Space Mono', monospace; font-size: 0.55rem; color: var(--muted); letter-spacing: 0.1em; text-transform: uppercase; margin-top: 3px; }
+
+  /* Loading */
+  #loading { position: absolute; inset: 0; z-index: 2000; display: flex; flex-direction: column; align-items: center; justify-content: center; background: var(--fog); gap: 20px; }
+  #loading h2 { font-family: 'Syne', sans-serif; font-weight: 800; font-size: 2rem; color: var(--accent); }
+  #loading p { font-family: 'Space Mono', monospace; font-size: 0.7rem; color: var(--muted); letter-spacing: 0.14em; text-transform: uppercase; }
+  .spinner { width: 32px; height: 32px; border: 2px solid rgba(37,99,235,0.2); border-top-color: var(--accent); border-radius: 50%; animation: spin 0.8s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* Permission banner */
+  #perm-banner { position: absolute; bottom: 100px; left: 50%; transform: translateX(-50%); z-index: 1000; display: none; padding: 12px 20px; border-radius: 10px; background: var(--card); border: 1px solid rgba(255,100,100,0.3); font-family: 'Space Mono', monospace; font-size: 0.7rem; color: #f87171; backdrop-filter: blur(8px); white-space: nowrap; }
+
+  /* User marker */
+  .user-dot { width: 16px; height: 16px; border-radius: 50%; background: var(--accent2); border: 2px solid #fff; animation: pulse-user 2s infinite; }
+  @keyframes pulse-user { 0%{box-shadow:0 0 0 0 rgba(56,232,200,0.5)} 70%{box-shadow:0 0 0 12px rgba(56,232,200,0)} 100%{box-shadow:0 0 0 0 rgba(56,232,200,0)} }
+
+  /* POI markers */
+  .poi-dot { width: 34px; height: 34px; border-radius: 50%; background: rgba(255,255,255,0.92); border: 1.5px solid rgba(37,99,235,0.3); display: flex; align-items: center; justify-content: center; font-size: 1rem; cursor: pointer; animation: float 3s ease-in-out infinite; transition: border-color 0.3s, background 0.3s; }
+  .poi-dot.discovered { border-color: var(--accent); background: rgba(37,99,235,0.1); box-shadow: 0 0 12px rgba(37,99,235,0.25); }
+  @keyframes float { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-4px)} }
+
+  /* Popup */
+  .leaflet-popup-content-wrapper { background: var(--card) !important; border: 1px solid rgba(37,99,235,0.25) !important; border-radius: 12px !important; backdrop-filter: blur(12px); box-shadow: 0 8px 32px rgba(0,0,0,0.5) !important; color: var(--text) !important; }
+  .leaflet-popup-tip { background: rgba(255,255,255,0.95) !important; }
+  .leaflet-popup-close-button { color: var(--muted) !important; }
+  .poi-popup { padding: 4px; min-width: 180px; }
+  .poi-popup-icon { font-size: 1.8rem; margin-bottom: 8px; }
+  .poi-popup-title { font-family: 'Syne', sans-serif; font-weight: 700; font-size: 0.95rem; color: var(--text); margin-bottom: 6px; }
+  .poi-popup-desc { font-family: 'Space Mono', monospace; font-size: 0.65rem; color: var(--muted); line-height: 1.6; margin-bottom: 10px; }
+  .poi-popup-badge { display: inline-block; padding: 3px 10px; border-radius: 20px; background: rgba(37,99,235,0.1); border: 1px solid rgba(37,99,235,0.4); font-family: 'Space Mono', monospace; font-size: 0.6rem; color: var(--accent); }
+
+  /* Toast */
+  #toast { position: absolute; top: 70px; left: 50%; transform: translateX(-50%) translateY(-20px); z-index: 1000; opacity: 0; transition: all 0.4s cubic-bezier(0.34,1.56,0.64,1); pointer-events: none; }
+  #toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+  .toast-inner { display: flex; align-items: center; gap: 10px; padding: 10px 18px; border-radius: 30px; background: var(--card); border: 1px solid rgba(37,99,235,0.4); backdrop-filter: blur(10px); white-space: nowrap; }
+  .t-icon { font-size: 1.1rem; }
+  .t-text { font-family: 'Space Mono', monospace; font-size: 0.68rem; color: var(--accent); letter-spacing: 0.08em; }
+
+  /* Camera button */
+  #camera-btn {
+    position: absolute; bottom: 100px; left: 50%; transform: translateX(-50%);
+    z-index: 1000; text-align: center;
+  }
+  #camera-trigger {
+    display: flex; align-items: center; gap: 8px;
+    padding: 12px 24px; border-radius: 30px;
+    background: #2563eb; color: #fff;
+    font-family: "Space Mono", monospace; font-size: 0.8rem;
+    letter-spacing: 0.08em; border: none; cursor: pointer;
+    box-shadow: 0 4px 20px rgba(37,99,235,0.4);
+    animation: pulse-cam 2s infinite;
+  }
+  @keyframes pulse-cam {
+    0%,100% { box-shadow: 0 4px 20px rgba(37,99,235,0.4); }
+    50%      { box-shadow: 0 4px 28px rgba(37,99,235,0.7); }
+  }
+  #camera-poi-name {
+    font-family: "Space Mono", monospace; font-size: 0.65rem;
+    color: #64748b; margin-top: 6px; letter-spacing: 0.08em;
+  }
+
+  .leaflet-control-attribution { display: none; }
+  .leaflet-control-zoom { display: none; }
+</style>
+</head>
+<body>
+
+<div id="map"></div>
+<div id="logo"><h1>Tabito</h1><p>explorez l'inconnu</p></div>
+<div id="gps-dot"></div>
+<div id="stats">
+  <div class="stat-chip"><span class="stat-val" id="stat-dist">0m</span><span class="stat-lbl">explorés</span></div>
+  <div class="stat-chip"><span class="stat-val" id="stat-pois">0</span><span class="stat-lbl">découvertes</span></div>
+  <div class="stat-chip" id="stat-city-chip" style="display:none">
+    <span class="stat-val" id="stat-coverage">0%</span>
+    <span class="stat-lbl" id="city-name">ville</span>
+  </div>
+</div>
+<button id="follow-btn" class="on"><span>📍</span><span id="follow-label">Suivi actif</span></button>
+<div id="loading"><h2>Tabito</h2><div class="spinner"></div><p>Chargement…</p></div>
+<div id="perm-banner">📍 Autorisez la localisation pour explorer</div>
+<div id="toast"><div class="toast-inner"><span class="t-icon"></span><span class="t-text"></span></div></div>
+<div id="camera-btn" style="display:none">
+  <button id="camera-trigger">📸 Photographier</button>
+  <div id="camera-poi-name"></div>
+</div>
+<input type="file" id="camera-input" accept="image/*" capture="environment" style="display:none" />
+
+<script>
+const STORAGE_KEY  = "tabito-v2";
+const CIRCLE_STEPS = 48;
+const FOG_COLOR    = "#cbd5e1";
+const FOG_BANDS    = [
+  { radius:0.03, opacity:0    },
+  { radius:0.04, opacity:0.15 },
+  { radius:0.055, opacity:0.35 },
+  { radius:0.07, opacity:0.55 },
+];
+const MAIN_OPACITY = 0.82;
+const POI_DIST_KM  = 0.05;
+const WORLD = { type:"Feature", properties:{}, geometry:{ type:"Polygon", coordinates:[[[-180,-90],[180,-90],[180,90],[-180,90],[-180,-90]]] }};
+
+// POI helpers
+function poiIcon(tags) {
+  if (tags.tourism === "museum")          return "🏛️";
+  if (tags.tourism === "monument" || tags.historic === "monument") return "🗿";
+  if (tags.historic === "castle")         return "🏰";
+  if (tags.historic === "ruins")          return "🏚️";
+  if (tags.amenity === "place_of_worship" || tags.building === "church" || tags.building === "cathedral") return "⛪";
+  if (tags.tourism === "artwork")         return "🎨";
+  if (tags.leisure === "park" || tags.leisure === "garden") return "🌳";
+  if (tags.amenity === "fountain")        return "⛲";
+  if (tags.historic === "memorial")       return "🕯️";
+  if (tags.tourism === "viewpoint")       return "🔭";
+  if (tags.amenity === "theatre")         return "🎭";
+  if (tags.tourism === "attraction")      return "✨";
+  return "📍";
+}
+function poiDesc(tags) {
+  if (tags.tourism === "museum")          return "Musée — entrez pour découvrir ses collections.";
+  if (tags.historic === "castle")         return "Un château chargé d'histoire.";
+  if (tags.historic === "monument" || tags.tourism === "monument") return "Monument historique.";
+  if (tags.historic === "ruins")          return "Ruines témoignant d'un passé lointain.";
+  if (tags.building === "church" || tags.building === "cathedral") return "Édifice religieux remarquable.";
+  if (tags.amenity === "place_of_worship") return "Lieu de culte.";
+  if (tags.tourism === "artwork")         return "Oeuvre d'art à découvrir.";
+  if (tags.leisure === "park")            return "Un espace vert pour se ressourcer.";
+  if (tags.leisure === "garden")          return "Jardin à explorer.";
+  if (tags.amenity === "fountain")        return "Une fontaine emblématique.";
+  if (tags.historic === "memorial")       return "Mémorial commémoratif.";
+  if (tags.tourism === "viewpoint")       return "Point de vue remarquable.";
+  if (tags.amenity === "theatre")         return "Salle de spectacle.";
+  return "Point d'intérêt à découvrir.";
+}
+async function fetchOSMPOIs(lng, lat, radiusM = 800) {
+  const query = `[out:json][timeout:10];(node["tourism"~"museum|monument|artwork|viewpoint|attraction"](around:${radiusM},${lat},${lng});node["historic"~"monument|castle|ruins|memorial"](around:${radiusM},${lat},${lng});node["amenity"~"place_of_worship|fountain|theatre"](around:${radiusM},${lat},${lng});node["leisure"~"park|garden"](around:${radiusM},${lat},${lng});way["leisure"~"park|garden"](around:${radiusM},${lat},${lng});way["historic"~"castle|ruins"](around:${radiusM},${lat},${lng});way["tourism"~"museum|monument"](around:${radiusM},${lat},${lng}););out center 40;`;
+  try {
+    const servers = ["https://maps.mail.ru/osm/tools/overpass/api/interpreter","https://overpass-api.de/api/interpreter"];
+    let res;
+    for (const s of servers) {
+      try { res = await fetch(s, { method:"POST", body:query }); if(res.ok) break; } catch {}
+    }
+    if (!res || !res.ok) throw new Error("All servers failed");
+    const data = await res.json();
+    return data.elements
+      .filter(el => el.tags && (el.tags.name || el.tags["name:fr"]))
+      .map(el => ({
+        id: `osm-${el.type}-${el.id}`,
+        name: el.tags["name:fr"] || el.tags.name,
+        desc: poiDesc(el.tags),
+        icon: poiIcon(el.tags),
+        lat: el.lat || el.center?.lat,
+        lng: el.lon || el.center?.lon,
+      }))
+      .filter(p => p.lat && p.lng);
+  } catch(e) { console.warn("Overpass unavailable", e); return []; }
+}
+
+// State
+let exploredBands = FOG_BANDS.map((_,i) => {
+  try { const d = localStorage.getItem(`${STORAGE_KEY}-band-${i}`); return d ? JSON.parse(d) : null; } catch { return null; }
+});
+let discovered = new Set();
+let totalDist  = parseFloat(localStorage.getItem(`${STORAGE_KEY}-dist`) || "0");
+let lastPos    = null;
+let followMode = true;
+let allPOIs    = [];
+let localAdded = false;
+try { const s = localStorage.getItem(`${STORAGE_KEY}-disc`); if(s) JSON.parse(s).forEach(id => discovered.add(id)); } catch {}
+
+// Map init
+const map = L.map("map", { zoomControl:false, attributionControl:false }).setView([48.8566, 2.3522], 15);
+L.tileLayer("https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png", { maxZoom:19, subdomains:"abcd" }).addTo(map);
+document.getElementById("loading").style.display = "none";
+
+// Fog helpers
+function computeFog(explored) {
+  if (!explored) return WORLD;
+  try { const d = turf.difference(WORLD, explored); return d || WORLD; } catch { return WORLD; }
+}
+function mergeExplored(cur, circle) {
+  if (!cur) return circle;
+  try { const u = turf.union(cur, circle); return u || cur; } catch { return cur; }
+}
+
+// Fog layers
+const fogLayers = [];
+function initFogLayers() {
+  FOG_BANDS.forEach((band, i) => {
+    if (band.opacity === 0) { fogLayers.push(null); return; }
+    const layer = L.geoJSON(computeFog(exploredBands[i]), {
+      style: { fillColor:FOG_COLOR, fillOpacity:band.opacity, stroke:false, weight:0 }
+    }).addTo(map);
+    fogLayers.push(layer);
+  });
+  const main = L.geoJSON(computeFog(exploredBands[FOG_BANDS.length-1]), {
+    style: { fillColor:FOG_COLOR, fillOpacity:MAIN_OPACITY, stroke:false, weight:0 }
+  }).addTo(map);
+  fogLayers.push(main);
+}
+
+function updateFogLayers() {
+  FOG_BANDS.forEach((_, i) => {
+    if (!fogLayers[i]) return;
+    fogLayers[i].clearLayers();
+    fogLayers[i].addData(computeFog(exploredBands[i]));
+  });
+  const main = fogLayers[FOG_BANDS.length];
+  if (main) { main.clearLayers(); main.addData(computeFog(exploredBands[FOG_BANDS.length-1])); }
+}
+
+function revealAt(lng, lat) {
+  FOG_BANDS.forEach((band, i) => {
+    const c = turf.circle([lng,lat], band.radius, { steps:CIRCLE_STEPS, units:"kilometers" });
+    exploredBands[i] = mergeExplored(exploredBands[i], c);
+    try { localStorage.setItem(`${STORAGE_KEY}-band-${i}`, JSON.stringify(exploredBands[i])); } catch {}
+  });
+  updateFogLayers();
+}
+
+// User marker
+let userMarker = null;
+function updateMarker(lat, lng) {
+  if (!userMarker) {
+    userMarker = L.marker([lat,lng], {
+      icon: L.divIcon({ className:"", html:'<div class="user-dot"></div>', iconSize:[16,16], iconAnchor:[8,8] })
+    }).addTo(map);
+  } else {
+    userMarker.setLatLng([lat,lng]);
+  }
+  if (followMode) map.panTo([lat,lng], { animate:true, duration:0.5 });
+}
+
+// POIs
+const poiMarkers = new Map();
+function addPOIMarker(poi) {
+  if (poiMarkers.has(poi.id)) return;
+  const isDisc = discovered.has(poi.id);
+  const marker = L.marker([poi.lat, poi.lng], {
+    icon: L.divIcon({
+      className:"",
+      html:`<div class="poi-dot${isDisc?" discovered":""}">${poi.icon}</div>`,
+      iconSize:[34,34], iconAnchor:[17,17]
+    })
+  }).addTo(map);
+  marker.on("click", () => { if (discovered.has(poi.id)) showPoiPopup(poi); });
+  poiMarkers.set(poi.id, marker);
+}
+async function setupPOIs(lng, lat) {
+  if (lng === undefined || localAdded) return;
+  localAdded = true;
+  // Show loading indicator
+  showToast("🔍", "Recherche des monuments…");
+  const osmPOIs = await fetchOSMPOIs(lng, lat);
+  allPOIs = osmPOIs.length > 0 ? osmPOIs : [];
+  if (osmPOIs.length === 0) showToast("📍", "Aucun monument trouvé à proximité");
+  else showToast("✅", `${osmPOIs.length} monuments trouvés !`);
+  allPOIs.forEach(addPOIMarker);
+}
+
+function showPoiPopup(poi) {
+  const photo = loadPhoto(poi.id);
+  const photoHtml = photo ? `<img src="${photo}" style="width:100%;border-radius:8px;margin-bottom:10px;max-height:120px;object-fit:cover;" />` : "";
+  L.popup()
+    .setLatLng([poi.lat, poi.lng])
+    .setContent(`<div class="poi-popup">${photoHtml}<div class="poi-popup-icon">${poi.icon}</div><div class="poi-popup-title">${poi.name}</div><div class="poi-popup-desc">${poi.desc}</div><span class="poi-popup-badge">📸 Découvert !</span></div>`)
+    .openOn(map);
+}
+
+function checkPOIs(lng, lat) {
+  let foundNearby = false;
+  allPOIs.forEach(poi => {
+    const dist = turf.distance([lng,lat],[poi.lng,poi.lat],{units:"kilometers"});
+    if (dist <= POI_DIST_KM) {
+      if (!discovered.has(poi.id)) {
+        foundNearby = true;
+        showCameraBtn(poi);
+      }
+    }
+  });
+  if (!foundNearby && nearbyPOI) hideCameraBtn();
+}
+
+// Photo storage
+function savePhoto(poiId, dataUrl) {
+  try { localStorage.setItem(`${STORAGE_KEY}-photo-${poiId}`, dataUrl); } catch {}
+}
+function loadPhoto(poiId) {
+  try { return localStorage.getItem(`${STORAGE_KEY}-photo-${poiId}`); } catch { return null; }
+}
+
+// City boundary
+async function fetchCityBoundary(lng, lat) {
+  const query = `[out:json][timeout:15];is_in(${lat},${lng})->.a;area.a["admin_level"="8"]["boundary"="administrative"]->.b;rel(pivot.b);out geom;`;
+  try {
+    const servers = ["https://maps.mail.ru/osm/tools/overpass/api/interpreter","https://overpass-api.de/api/interpreter"];
+    let res;
+    for (const s of servers) {
+      try { res = await fetch(s, { method:"POST", body:query }); if(res.ok) break; } catch {}
+    }
+    if (!res || !res.ok) throw new Error("All servers failed");
+    const data = await res.json();
+    if (!data.elements || !data.elements.length) return null;
+    const rel = data.elements[0];
+
+    // Reconstruct outer polygon from relation members
+    const outerWays = rel.members.filter(m => m.type === "way" && m.role === "outer" && m.geometry);
+    if (!outerWays.length) return null;
+
+    // Chain segments in correct order
+    let segments = outerWays.map(w => w.geometry.map(p => [p.lon, p.lat]));
+    const ptEq = (a, b) => Math.abs(a[0]-b[0]) < 1e-6 && Math.abs(a[1]-b[1]) < 1e-6;
+    const ptDist = (a, b) => Math.sqrt((a[0]-b[0])**2 + (a[1]-b[1])**2);
+
+    // Build all rings by greedy nearest-neighbor chaining
+    let rings = [];
+    while (segments.length > 0) {
+      let ring = [...segments[0]];
+      segments.splice(0, 1);
+      let maxIter = segments.length * 3;
+      while (segments.length > 0 && maxIter-- > 0) {
+        const tail = ring[ring.length - 1];
+        let bestIdx = -1, bestDist = 1e9, bestReverse = false;
+        for (let i = 0; i < segments.length; i++) {
+          const seg = segments[i];
+          const d1 = ptDist(tail, seg[0]);
+          const d2 = ptDist(tail, seg[seg.length-1]);
+          if (d1 < bestDist) { bestDist = d1; bestIdx = i; bestReverse = false; }
+          if (d2 < bestDist) { bestDist = d2; bestIdx = i; bestReverse = true; }
+        }
+        if (bestIdx === -1 || bestDist > 0.001) break;
+        const seg = segments[bestIdx];
+        segments.splice(bestIdx, 1);
+        ring = ring.concat(bestReverse ? [...seg].reverse().slice(1) : seg.slice(1));
+      }
+      if (!ptEq(ring[0], ring[ring.length-1])) ring.push(ring[0]);
+      rings.push(ring);
+    }
+
+    // Use the longest ring as the outer boundary
+    rings.sort((a, b) => b.length - a.length);
+    let coords = rings[0];
+    if (coords.length < 4) return null;
+
+    const polygon = turf.polygon([coords]);
+    cityArea = turf.area(polygon) / 1e6;
+    cityBoundary = polygon;
+
+    L.geoJSON(polygon, {
+      style: { color:"#2563eb", weight:2.5, fillOpacity:0, dashArray:"8,5", opacity:1 }
+    }).addTo(map);
+
+    const cityName = rel.tags?.["name:fr"] || rel.tags?.name || "Votre ville";
+    document.getElementById("city-name").textContent = cityName;
+    updateStats();
+    return polygon;
+  } catch(e) { console.warn("City boundary unavailable", e); return null; }
+}
+
+function computeCoveragePercent() {
+  if (!cityBoundary || !exploredBands[0]) return 0;
+  try {
+    const intersection = turf.intersect(turf.featureCollection([exploredBands[0], cityBoundary]));
+    if (!intersection) return 0;
+    const exploredArea = turf.area(intersection) / 1e6;
+    return Math.min(100, (exploredArea / cityArea) * 100);
+  } catch { return 0; }
+}
+
+// Assassin's Creed style reveal around a POI
+const POI_REVEAL_RADIUS_KM = 0.35; // 350m reveal radius
+const POI_REVEAL_STEPS = 12; // animation steps
+
+function revealAreaAroundPOI(poi) {
+  let step = 0;
+  const interval = setInterval(() => {
+    step++;
+    const radius = (POI_REVEAL_RADIUS_KM / POI_REVEAL_STEPS) * step;
+    // Reveal all fog bands proportionally
+    FOG_BANDS.forEach((band, i) => {
+      const r = Math.max(band.radius, radius * (1 + i * 0.15));
+      const circle = turf.circle([poi.lng, poi.lat], r, { steps: CIRCLE_STEPS, units: "kilometers" });
+      exploredBands[i] = mergeExplored(exploredBands[i], circle);
+      try { localStorage.setItem(`${STORAGE_KEY}-band-${i}`, JSON.stringify(exploredBands[i])); } catch {}
+    });
+    updateFogLayers();
+    if (step >= POI_REVEAL_STEPS) clearInterval(interval);
+  }, 80);
+}
+
+// Camera
+let nearbyPOI = null;
+let cityBoundary = null;
+let cityArea = 0;
+const cameraBtn   = document.getElementById("camera-btn");
+const cameraInput = document.getElementById("camera-input");
+
+document.getElementById("camera-trigger").addEventListener("click", () => {
+  cameraInput.click();
+});
+
+cameraInput.addEventListener("change", (e) => {
+  const file = e.target.files[0];
+  if (!file || !nearbyPOI) return;
+  const reader = new FileReader();
+  reader.onload = (ev) => {
+    const dataUrl = ev.target.result;
+    savePhoto(nearbyPOI.id, dataUrl);
+    // Mark as discovered
+    if (!discovered.has(nearbyPOI.id)) {
+      discovered.add(nearbyPOI.id);
+      try { localStorage.setItem(`${STORAGE_KEY}-disc`, JSON.stringify([...discovered])); } catch {}
+      const m = poiMarkers.get(nearbyPOI.id);
+      if (m) m.setIcon(L.divIcon({ className:"", html:`<div class="poi-dot discovered">${nearbyPOI.icon}</div>`, iconSize:[34,34], iconAnchor:[17,17] }));
+      updateStats();
+    }
+    // Assassin's Creed reveal — big area around the POI
+    revealAreaAroundPOI(nearbyPOI);
+    showPoiPopup(nearbyPOI);
+    showToast("📸", `Zone révélée autour de ${nearbyPOI.name} !`);
+    hideCameraBtn();
+  };
+  reader.readAsDataURL(file);
+  cameraInput.value = "";
+});
+
+function showCameraBtn(poi) {
+  nearbyPOI = poi;
+  cameraBtn.style.display = "block";
+  document.getElementById("camera-poi-name").textContent = poi.name;
+}
+function hideCameraBtn() {
+  cameraBtn.style.display = "none";
+  nearbyPOI = null;
+}
+
+// Stats
+function updateStats() {
+  document.getElementById("stat-dist").textContent = totalDist < 1 ? Math.round(totalDist*1000)+"m" : totalDist.toFixed(2)+"km";
+  document.getElementById("stat-pois").textContent = discovered.size;
+  if (cityBoundary) {
+    const pct = computeCoveragePercent();
+    document.getElementById("stat-coverage").textContent = pct < 0.1 ? "<0.1%" : pct.toFixed(1)+"%";
+    document.getElementById("stat-city-chip").style.display = "flex";
+  }
+}
+updateStats();
+
+// Toast
+let toastTimer;
+function showToast(icon, text) {
+  const el = document.getElementById("toast");
+  el.querySelector(".t-icon").textContent = icon;
+  el.querySelector(".t-text").textContent = text;
+  el.classList.add("show");
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => el.classList.remove("show"), 3000);
+}
+
+// Follow button
+document.getElementById("follow-btn").addEventListener("click", () => {
+  followMode = !followMode;
+  document.getElementById("follow-btn").classList.toggle("on", followMode);
+  document.getElementById("follow-label").textContent = followMode ? "Suivi actif" : "Suivi désactivé";
+});
+
+// Geolocation
+if (!("geolocation" in navigator)) {
+  document.getElementById("perm-banner").style.display = "block";
+  setupPOIs(); initFogLayers();
+} else {
+  navigator.geolocation.getCurrentPosition(async pos => {
+    const { longitude:lng, latitude:lat } = pos.coords;
+    document.getElementById("gps-dot").classList.add("active");
+    revealAt(lng, lat);
+    initFogLayers();
+    map.setView([lat,lng], 16);
+    updateMarker(lat, lng);
+    await setupPOIs(lng, lat);
+    fetchCityBoundary(lng, lat);
+    checkPOIs(lng, lat);
+    lastPos = { lng, lat };
+    updateStats();
+  }, () => {
+    document.getElementById("perm-banner").style.display = "block";
+    initFogLayers();
+  }, { enableHighAccuracy:true, timeout:10000 });
+
+  navigator.geolocation.watchPosition(pos => {
+    const { longitude:lng, latitude:lat } = pos.coords;
+    document.getElementById("gps-dot").classList.add("active");
+    if (lastPos) {
+      const d = turf.distance([lastPos.lng,lastPos.lat],[lng,lat],{units:"kilometers"});
+      if (d > 0.005) {
+        totalDist += d;
+        try { localStorage.setItem(`${STORAGE_KEY}-dist`, totalDist.toString()); } catch {}
+      }
+    }
+    lastPos = { lng, lat };
+    revealAt(lng, lat);
+    updateMarker(lat, lng);
+    checkPOIs(lng, lat);
+    updateStats();
+  }, () => {}, { enableHighAccuracy:true, maximumAge:2000, timeout:10000 });
+}
+</script>
+</body>
+</html>
