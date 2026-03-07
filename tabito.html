@@ -28,7 +28,7 @@
   #logo p { font-family: 'Space Mono', monospace; font-size: 0.62rem; color: var(--muted); letter-spacing: 0.12em; text-transform: uppercase; margin-top: 3px; }
 
   /* GPS dot */
-  #gps-dot { position: absolute; top: 20px; right: 16px; z-index: 1000; width: 10px; height: 10px; border-radius: 50%; background: var(--muted); }
+  #gps-dot { position: absolute; top: 24px; right: 16px; z-index: 1000; width: 10px; height: 10px; border-radius: 50%; background: var(--muted); }
   #gps-dot.active { background: var(--accent); animation: pulse-dot 2s infinite; }
   @keyframes pulse-dot { 0%{box-shadow:0 0 0 0 rgba(37,99,235,0.6)} 70%{box-shadow:0 0 0 8px rgba(200,241,53,0)} 100%{box-shadow:0 0 0 0 rgba(200,241,53,0)} }
 
@@ -37,7 +37,7 @@
   #follow-btn.on { border-color: var(--accent); color: var(--accent); }
 
   /* Stats */
-  #stats { position: absolute; bottom: 32px; left: 16px; z-index: 1000; display: flex; gap: 10px; }
+  #stats { position: absolute; bottom: 20px; left: 16px; z-index: 1000; display: flex; gap: 8px; flex-wrap: wrap; max-width: calc(100vw - 32px); }
   .stat-chip { display: flex; flex-direction: column; align-items: center; padding: 8px 14px; border-radius: 10px; border: 1px solid rgba(0,0,0,0.08); background: var(--card); backdrop-filter: blur(8px); }
   .stat-val { font-family: 'Syne', sans-serif; font-weight: 700; font-size: 1.05rem; color: var(--text); line-height: 1; }
   .stat-lbl { font-family: 'Space Mono', monospace; font-size: 0.55rem; color: var(--muted); letter-spacing: 0.1em; text-transform: uppercase; margin-top: 3px; }
@@ -103,7 +103,7 @@
 
   /* Route planner */
   #route-btn {
-    position: absolute; top: 16px; right: 40px; z-index: 1000;
+    position: absolute; top: 16px; right: 44px; z-index: 1000;
     width: 38px; height: 38px; border-radius: 50%;
     background: #2563eb; color: #fff; border: none;
     font-size: 1.1rem; cursor: pointer;
@@ -210,7 +210,7 @@
     <span class="stat-lbl" id="city-name">ville</span>
   </div>
 </div>
-<button id="follow-btn" class="on"><span>📍</span><span id="follow-label">Suivi actif</span></button>
+
 <div id="loading"><h2>Tabito</h2><div class="spinner"></div><p>Chargement…</p></div>
 <div id="perm-banner">📍 Autorisez la localisation pour explorer</div>
 <div id="toast"><div class="toast-inner"><span class="t-icon"></span><span class="t-text"></span></div></div>
@@ -644,12 +644,7 @@ function showToast(icon, text) {
   toastTimer = setTimeout(() => el.classList.remove("show"), 3000);
 }
 
-// Follow button
-document.getElementById("follow-btn").addEventListener("click", () => {
-  followMode = !followMode;
-  document.getElementById("follow-btn").classList.toggle("on", followMode);
-  document.getElementById("follow-label").textContent = followMode ? "Suivi actif" : "Suivi désactivé";
-});
+// Follow mode always on
 
 // ── ROUTE PLANNER ─────────────────────────────────────────────────────
 const AVG_SPEED_KMH = 5;       // average walking speed
