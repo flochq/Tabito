@@ -287,16 +287,29 @@ function addPOIMarker(poi) {
   marker.on("click", () => { if (discovered.has(poi.id)) showPoiPopup(poi); });
   poiMarkers.set(poi.id, marker);
 }
+const DYNAMIC_POI_RADIUS = 1500;   // fetch POIs within 1.5km
+const DYNAMIC_POI_TRIGGER = 0.4;   // reload when moved 400m from last fetch
+let lastFetchPos = null;
+
 async function setupPOIs(lng, lat) {
-  if (lng === undefined || localAdded) return;
-  localAdded = true;
-  // Show loading indicator
-  showToast("🔍", "Recherche des monuments…");
-  const osmPOIs = await fetchOSMPOIs(lng, lat);
-  allPOIs = osmPOIs.length > 0 ? osmPOIs : [];
-  if (osmPOIs.length === 0) showToast("📍", "Aucun monument trouvé à proximité");
-  else showToast("✅", `${osmPOIs.length} monuments trouvés !`);
-  allPOIs.forEach(addPOIMarker);
+  if (lng === undefined) return;
+  // Check if we need to fetch (first time or moved enough)
+  if (lastFetchPos) {
+    const moved = turf.distance([lastFetchPos.lng, lastFetchPos.lat], [lng, lat], {units:"kilometers"});
+    if (moved < DYNAMIC_POI_TRIGGER) return;
+  }
+  lastFetchPos = { lng, lat };
+  const osmPOIs = await fetchOSMPOIs(lng, lat, DYNAMIC_POI_RADIUS);
+  // Only add POIs not already displayed
+  let newCount = 0;
+  osmPOIs.forEach(poi => {
+    if (!poiMarkers.has(poi.id)) {
+      allPOIs.push(poi);
+      addPOIMarker(poi);
+      newCount++;
+    }
+  });
+  if (newCount > 0) showToast("✅", `${newCount} nouveaux monuments trouvés !`);
 }
 
 function showPoiPopup(poi) {
@@ -540,6 +553,7 @@ if (!("geolocation" in navigator)) {
     lastPos = { lng, lat };
     revealAt(lng, lat);
     updateMarker(lat, lng);
+    setupPOIs(lng, lat);
     checkPOIs(lng, lat);
     updateStats();
   }, () => {}, { enableHighAccuracy:true, maximumAge:2000, timeout:10000 });
