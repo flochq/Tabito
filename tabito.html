@@ -318,6 +318,12 @@ async function fetchOSMPOIs(lng, lat, radiusM = 800) {
     const data = await res.json();
     return data.elements
       .filter(el => el.tags && (el.tags.name || el.tags["name:fr"]))
+      .filter(el => {
+        // Pour les parcs et jardins, exiger wikipedia, wikidata ou heritage
+        const isGreen = el.tags.leisure === "park" || el.tags.leisure === "garden";
+        if (!isGreen) return true;
+        return el.tags.wikipedia || el.tags.wikidata || el.tags.heritage;
+      })
       .map(el => ({
         id: `osm-${el.type}-${el.id}`,
         name: el.tags["name:fr"] || el.tags.name,
@@ -335,15 +341,7 @@ let exploredBands = FOG_BANDS.map((_,i) => {
   try { const d = localStorage.getItem(`${STORAGE_KEY}-band-${i}`); return d ? JSON.parse(d) : null; } catch { return null; }
 });
 let discovered = new Set();
-const today = new Date().toDateString();
-const savedDate = localStorage.getItem(`${STORAGE_KEY}-date`);
-if (savedDate !== today) {
-  localStorage.setItem(`${STORAGE_KEY}-dist`, "0");
-  localStorage.setItem(`${STORAGE_KEY}-disc`, "[]");
-  localStorage.setItem(`${STORAGE_KEY}-date`, today);
-  discovered.clear();
-}
-let totalDist = parseFloat(localStorage.getItem(`${STORAGE_KEY}-dist`) || "0");
+let totalDist  = parseFloat(localStorage.getItem(`${STORAGE_KEY}-dist`) || "0");
 let lastPos    = null;
 let followMode = true;
 let allPOIs    = [];
@@ -845,7 +843,7 @@ if (!("geolocation" in navigator)) {
     document.getElementById("gps-dot").classList.add("active");
     if (lastPos) {
       const d = turf.distance([lastPos.lng,lastPos.lat],[lng,lat],{units:"kilometers"});
-      if (d > 0.020) {
+      if (d > 0.005) {
         totalDist += d;
         try { localStorage.setItem(`${STORAGE_KEY}-dist`, totalDist.toString()); } catch {}
       }
