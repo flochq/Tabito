@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="fr">
 <head>
@@ -100,6 +101,98 @@
     color: #64748b; margin-top: 6px; letter-spacing: 0.08em;
   }
 
+  /* Route planner */
+  #route-btn {
+    position: absolute; top: 16px; right: 40px; z-index: 1000;
+    width: 38px; height: 38px; border-radius: 50%;
+    background: #2563eb; color: #fff; border: none;
+    font-size: 1.1rem; cursor: pointer;
+    box-shadow: 0 2px 12px rgba(37,99,235,0.4);
+    transition: transform 0.2s;
+  }
+  #route-btn:hover { transform: scale(1.1); }
+
+  #route-panel {
+    position: absolute; bottom: 90px; left: 50%; transform: translateX(-50%);
+    z-index: 1000; display: none;
+    background: rgba(255,255,255,0.97); border-radius: 16px;
+    border: 1px solid rgba(37,99,235,0.2);
+    box-shadow: 0 8px 32px rgba(0,0,0,0.15);
+    width: min(360px, 90vw); overflow: hidden;
+    backdrop-filter: blur(12px);
+  }
+  #route-panel-header {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 14px 16px; border-bottom: 1px solid rgba(0,0,0,0.07);
+    font-family: "Syne", sans-serif; font-weight: 700;
+    font-size: 0.9rem; color: #1e293b;
+  }
+  #route-close {
+    background: none; border: none; cursor: pointer;
+    color: #64748b; font-size: 1rem;
+  }
+  #route-options, #route-result { padding: 16px; }
+  .route-opt-group { margin-bottom: 14px; }
+  .route-opt-group label {
+    font-family: "Space Mono", monospace; font-size: 0.65rem;
+    color: #64748b; text-transform: uppercase; letter-spacing: 0.1em;
+    display: block; margin-bottom: 8px;
+  }
+  .route-btns { display: flex; gap: 8px; }
+  .route-type-btn {
+    flex: 1; padding: 8px 4px; border-radius: 8px;
+    border: 1px solid rgba(37,99,235,0.2);
+    background: #f8fafc; color: #64748b;
+    font-family: "Space Mono", monospace; font-size: 0.65rem;
+    cursor: pointer; transition: all 0.2s;
+  }
+  .route-type-btn.active {
+    background: #2563eb; color: #fff; border-color: #2563eb;
+  }
+  .route-input-group {
+    display: flex; align-items: center; gap: 12px; margin-bottom: 16px;
+  }
+  .route-input-group input[type=range] {
+    flex: 1; accent-color: #2563eb;
+  }
+  .route-input-group span {
+    font-family: "Syne", sans-serif; font-weight: 700;
+    font-size: 0.9rem; color: #1e293b; min-width: 70px; text-align: right;
+  }
+  #route-generate {
+    width: 100%; padding: 12px; border-radius: 10px;
+    background: #2563eb; color: #fff; border: none;
+    font-family: "Space Mono", monospace; font-size: 0.75rem;
+    letter-spacing: 0.06em; cursor: pointer;
+    box-shadow: 0 2px 12px rgba(37,99,235,0.3);
+  }
+  #route-summary {
+    font-family: "Space Mono", monospace; font-size: 0.7rem;
+    color: #64748b; margin-bottom: 12px; line-height: 1.6;
+  }
+  #route-steps-list { margin-bottom: 14px; }
+  .route-step {
+    display: flex; align-items: center; gap: 10px;
+    padding: 8px 0; border-bottom: 1px solid rgba(0,0,0,0.05);
+  }
+  .route-step-num {
+    width: 24px; height: 24px; border-radius: 50%;
+    background: #2563eb; color: #fff;
+    font-family: "Syne", sans-serif; font-weight: 700; font-size: 0.7rem;
+    display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+  }
+  .route-step-name {
+    font-family: "Space Mono", monospace; font-size: 0.68rem; color: #1e293b;
+  }
+  .route-step-dist { font-family: "Space Mono", monospace; font-size: 0.6rem; color: #94a3b8; margin-left: auto; }
+  #route-start, #route-reset {
+    width: 100%; padding: 10px; border-radius: 10px; border: none;
+    font-family: "Space Mono", monospace; font-size: 0.72rem;
+    letter-spacing: 0.06em; cursor: pointer; margin-bottom: 8px;
+  }
+  #route-start { background: #2563eb; color: #fff; }
+  #route-reset { background: #f1f5f9; color: #64748b; }
+
   .leaflet-control-attribution { display: none; }
   .leaflet-control-zoom { display: none; }
 </style>
@@ -121,6 +214,46 @@
 <div id="loading"><h2>Tabito</h2><div class="spinner"></div><p>Chargement…</p></div>
 <div id="perm-banner">📍 Autorisez la localisation pour explorer</div>
 <div id="toast"><div class="toast-inner"><span class="t-icon"></span><span class="t-text"></span></div></div>
+
+<!-- Route planner -->
+<div id="route-panel">
+  <div id="route-panel-header">
+    <span>🧭 Planifier une balade</span>
+    <button id="route-close">✕</button>
+  </div>
+  <div id="route-options">
+    <div class="route-opt-group">
+      <label>Je veux marcher…</label>
+      <div class="route-btns">
+        <button class="route-type-btn active" data-type="duration">⏱ Durée</button>
+        <button class="route-type-btn" data-type="distance">📏 Distance</button>
+        <button class="route-type-btn" data-type="steps">👟 Pas</button>
+      </div>
+    </div>
+    <div id="route-duration-group" class="route-input-group">
+      <input type="range" id="route-duration" min="15" max="120" step="15" value="45" />
+      <span id="route-duration-label">45 min</span>
+    </div>
+    <div id="route-distance-group" class="route-input-group" style="display:none">
+      <input type="range" id="route-distance" min="1" max="15" step="0.5" value="4" />
+      <span id="route-distance-label">4 km</span>
+    </div>
+    <div id="route-steps-group" class="route-input-group" style="display:none">
+      <input type="range" id="route-steps" min="2000" max="15000" step="1000" value="8000" />
+      <span id="route-steps-label">8 000 pas</span>
+    </div>
+    <button id="route-generate">Générer l'itinéraire 🗺️</button>
+  </div>
+  <div id="route-result" style="display:none">
+    <div id="route-summary"></div>
+    <div id="route-steps-list"></div>
+    <button id="route-start">C'est parti ! 🚀</button>
+    <button id="route-reset">↩ Recommencer</button>
+  </div>
+</div>
+
+<!-- Route toggle button -->
+<button id="route-btn">🧭</button>
 <div id="camera-btn" style="display:none">
   <button id="camera-trigger">📸 Photographier</button>
   <div id="camera-poi-name"></div>
@@ -516,6 +649,170 @@ document.getElementById("follow-btn").addEventListener("click", () => {
   followMode = !followMode;
   document.getElementById("follow-btn").classList.toggle("on", followMode);
   document.getElementById("follow-label").textContent = followMode ? "Suivi actif" : "Suivi désactivé";
+});
+
+// ── ROUTE PLANNER ─────────────────────────────────────────────────────
+const AVG_SPEED_KMH = 5;       // average walking speed
+const STEPS_PER_KM  = 1300;    // average steps per km
+let activeRouteLayer = null;
+let activeRouteMarkers = [];
+
+// UI interactions
+document.getElementById("route-btn").addEventListener("click", () => {
+  const panel = document.getElementById("route-panel");
+  panel.style.display = panel.style.display === "none" ? "block" : "none";
+});
+document.getElementById("route-close").addEventListener("click", () => {
+  document.getElementById("route-panel").style.display = "none";
+});
+
+// Type switcher
+document.querySelectorAll(".route-type-btn").forEach(btn => {
+  btn.addEventListener("click", () => {
+    document.querySelectorAll(".route-type-btn").forEach(b => b.classList.remove("active"));
+    btn.classList.add("active");
+    document.getElementById("route-duration-group").style.display = "none";
+    document.getElementById("route-distance-group").style.display = "none";
+    document.getElementById("route-steps-group").style.display = "none";
+    document.getElementById(`route-${btn.dataset.type}-group`).style.display = "flex";
+  });
+});
+
+// Sliders
+document.getElementById("route-duration").addEventListener("input", e => {
+  document.getElementById("route-duration-label").textContent = `${e.target.value} min`;
+});
+document.getElementById("route-distance").addEventListener("input", e => {
+  document.getElementById("route-distance-label").textContent = `${e.target.value} km`;
+});
+document.getElementById("route-steps").addEventListener("input", e => {
+  document.getElementById("route-steps-label").textContent = `${parseInt(e.target.value).toLocaleString("fr-FR")} pas`;
+});
+
+// Convert any constraint to km
+function getTargetKm() {
+  const activeType = document.querySelector(".route-type-btn.active").dataset.type;
+  if (activeType === "duration") return (parseInt(document.getElementById("route-duration").value) / 60) * AVG_SPEED_KMH;
+  if (activeType === "distance") return parseFloat(document.getElementById("route-distance").value);
+  if (activeType === "steps")    return parseInt(document.getElementById("route-steps").value) / STEPS_PER_KM;
+}
+
+// Fetch walking route from OSRM
+async function fetchRoute(coords) {
+  const coordStr = coords.map(c => `${c[0]},${c[1]}`).join(";");
+  try {
+    const res = await fetch(`https://router.project-osrm.org/route/v1/foot/${coordStr}?overview=full&geometries=geojson&steps=false`);
+    const data = await res.json();
+    if (data.code !== "Ok") return null;
+    return data.routes[0];
+  } catch { return null; }
+}
+
+// Select best POIs for route
+function selectRoutePOIs(lng, lat, targetKm) {
+  // Get undiscovered POIs sorted by distance
+  const candidates = allPOIs
+    .filter(poi => !discovered.has(poi.id))
+    .map(poi => ({ ...poi, dist: turf.distance([lng,lat],[poi.lng,poi.lat],{units:"kilometers"}) }))
+    .filter(poi => poi.dist <= targetKm * 0.6) // must be reachable
+    .sort((a,b) => a.dist - b.dist);
+
+  // Greedily pick POIs that fit in the budget
+  const selected = [];
+  let remaining = targetKm * 0.5; // leave half for return
+  let lastLng = lng, lastLat = lat;
+
+  for (const poi of candidates) {
+    const d = turf.distance([lastLng,lastLat],[poi.lng,poi.lat],{units:"kilometers"});
+    if (d <= remaining) {
+      selected.push(poi);
+      remaining -= d;
+      lastLng = poi.lng; lastLat = poi.lat;
+      if (selected.length >= 5) break; // max 5 POIs
+    }
+  }
+  return selected;
+}
+
+document.getElementById("route-generate").addEventListener("click", async () => {
+  if (!lastPos) { showToast("📍", "Position GPS requise"); return; }
+  const btn = document.getElementById("route-generate");
+  btn.textContent = "Calcul en cours…";
+  btn.disabled = true;
+
+  const targetKm = getTargetKm();
+  const pois = selectRoutePOIs(lastPos.lng, lastPos.lat, targetKm);
+
+  if (pois.length === 0) {
+    showToast("😕", "Aucun monument à portée, essayez un rayon plus grand");
+    btn.textContent = "Générer l'itinéraire 🗺️"; btn.disabled = false;
+    return;
+  }
+
+  // Build waypoints: start → POIs → start
+  const waypoints = [
+    [lastPos.lng, lastPos.lat],
+    ...pois.map(p => [p.lng, p.lat]),
+    [lastPos.lng, lastPos.lat]
+  ];
+
+  const route = await fetchRoute(waypoints);
+  btn.textContent = "Générer l'itinéraire 🗺️"; btn.disabled = false;
+
+  if (!route) { showToast("❌", "Impossible de calculer l'itinéraire"); return; }
+
+  const distKm = (route.distance / 1000).toFixed(1);
+  const durMin = Math.round(route.duration / 60);
+
+  // Show result
+  document.getElementById("route-options").style.display = "none";
+  document.getElementById("route-result").style.display = "block";
+  document.getElementById("route-summary").innerHTML =
+    `📏 <b>${distKm} km</b> &nbsp;·&nbsp; ⏱ <b>${durMin} min</b> &nbsp;·&nbsp; 🏛️ <b>${pois.length} monuments</b>`;
+
+  const stepsList = document.getElementById("route-steps-list");
+  stepsList.innerHTML = "";
+  pois.forEach((poi, i) => {
+    stepsList.innerHTML += `<div class="route-step">
+      <div class="route-step-num">${i+1}</div>
+      <div class="route-step-name">${poi.icon} ${poi.name}</div>
+      <div class="route-step-dist">${poi.dist.toFixed(1)}km</div>
+    </div>`;
+  });
+
+  // Draw route on map
+  if (activeRouteLayer) map.removeLayer(activeRouteLayer);
+  activeRouteLayer = L.geoJSON(route.geometry, {
+    style: { color:"#2563eb", weight:4, opacity:0.7, dashArray:"8,4" }
+  }).addTo(map);
+
+  // Numbered markers on POIs
+  activeRouteMarkers.forEach(m => map.removeLayer(m));
+  activeRouteMarkers = pois.map((poi, i) => {
+    return L.marker([poi.lat, poi.lng], {
+      icon: L.divIcon({
+        className:"",
+        html:`<div style="width:26px;height:26px;border-radius:50%;background:#2563eb;color:#fff;display:flex;align-items:center;justify-content:center;font-family:Syne,sans-serif;font-weight:700;font-size:0.75rem;border:2px solid #fff;box-shadow:0 2px 8px rgba(37,99,235,0.4)">${i+1}</div>`,
+        iconSize:[26,26], iconAnchor:[13,13]
+      })
+    }).addTo(map);
+  });
+
+  // Fit map to route
+  map.fitBounds(activeRouteLayer.getBounds(), { padding:[40,40] });
+});
+
+document.getElementById("route-start").addEventListener("click", () => {
+  document.getElementById("route-panel").style.display = "none";
+  showToast("🧭", "Bonne balade !");
+});
+
+document.getElementById("route-reset").addEventListener("click", () => {
+  document.getElementById("route-options").style.display = "block";
+  document.getElementById("route-result").style.display = "none";
+  if (activeRouteLayer) { map.removeLayer(activeRouteLayer); activeRouteLayer = null; }
+  activeRouteMarkers.forEach(m => map.removeLayer(m));
+  activeRouteMarkers = [];
 });
 
 // Geolocation
