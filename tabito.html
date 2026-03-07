@@ -335,7 +335,15 @@ let exploredBands = FOG_BANDS.map((_,i) => {
   try { const d = localStorage.getItem(`${STORAGE_KEY}-band-${i}`); return d ? JSON.parse(d) : null; } catch { return null; }
 });
 let discovered = new Set();
-let totalDist  = parseFloat(localStorage.getItem(`${STORAGE_KEY}-dist`) || "0");
+const today = new Date().toDateString();
+const savedDate = localStorage.getItem(`${STORAGE_KEY}-date`);
+if (savedDate !== today) {
+  localStorage.setItem(`${STORAGE_KEY}-dist`, "0");
+  localStorage.setItem(`${STORAGE_KEY}-disc`, "[]");
+  localStorage.setItem(`${STORAGE_KEY}-date`, today);
+  discovered.clear();
+}
+let totalDist = parseFloat(localStorage.getItem(`${STORAGE_KEY}-dist`) || "0");
 let lastPos    = null;
 let followMode = true;
 let allPOIs    = [];
@@ -837,7 +845,7 @@ if (!("geolocation" in navigator)) {
     document.getElementById("gps-dot").classList.add("active");
     if (lastPos) {
       const d = turf.distance([lastPos.lng,lastPos.lat],[lng,lat],{units:"kilometers"});
-      if (d > 0.005) {
+      if (d > 0.020) {
         totalDist += d;
         try { localStorage.setItem(`${STORAGE_KEY}-dist`, totalDist.toString()); } catch {}
       }
