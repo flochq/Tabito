@@ -740,7 +740,7 @@ cameraInput.addEventListener("change", (e) => {
     const reader = new FileReader();
     reader.onload = (ev) => {
       savePhoto(id, ev.target.result);
-      freePhotos.push({ id, name:"Photo libre", icon:"📸", lat:lastPos?.lat, lng:lastPos?.lng, desc:"" });
+      freePhotos.push({ id, name:"Photo libre", icon:"📸", lat:lastPos?.lat, lng:lastPos?.lng, desc:"", src:ev.target.result });
       updateStats();
       showToast("📸", "Photo sauvegardée !");
     };
