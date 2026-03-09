@@ -987,6 +987,15 @@ function savePhotoCollection(poiId, col) {
 }
 
 let freePhotos = [];
+try {
+  const saved = localStorage.getItem(`${STORAGE_KEY}-freephotos`);
+  if (saved) {
+    freePhotos = JSON.parse(saved).map(p => ({
+      ...p,
+      src: p.src || loadPhoto(p.id)
+    }));
+  }
+} catch {}
 let activeCollection = "all";
 
 function openAlbum() {
