@@ -991,14 +991,7 @@ function loadPhotoCollection(poiId) {
 function savePhotoCollection(poiId, col) {
   try { localStorage.setItem(`${STORAGE_KEY}-photocol-${poiId}`, col); } catch {}
 }
-
-let freePhotos = [];
-try {
-  const saved = localStorage.getItem(`${STORAGE_KEY}-freephotos`);
-  if (saved) freePhotos = JSON.parse(saved);
-} catch {}
-let activeCollection = "all";
-
+ 
 function openAlbum() {
   renderAlbumTabs();
   renderAlbumContent();
