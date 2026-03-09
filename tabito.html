@@ -746,6 +746,7 @@ cameraInput.addEventListener("change", (e) => {
     };
     reader.readAsDataURL(file);
     cameraInput.value = "";
+    nearbyPOI = null;
     return;
   }
   const reader = new FileReader();
