@@ -740,7 +740,7 @@ cameraInput.addEventListener("change", (e) => {
     const reader = new FileReader();
     reader.onload = (ev) => {
       savePhoto(id, ev.target.result);
-      freePhotos.push({ id, name:"Photo libre", icon:"📸", lat:lastPos?.lat, lng:lastPos?.lng, desc:"" });
+      freePhotos.push({ id, name:"Photo libre", icon:"📸", lat:lastPos?.lat, lng:lastPos?.lng, desc:"", src:ev.target.result });
       updateStats();
       showToast("📸", "Photo sauvegardée !");
     };
@@ -1049,7 +1049,7 @@ function renderAlbumContent() {
 
   content.innerHTML = `<div class="album-grid">${filtered.map(poi => `
     <div class="album-photo-card" data-poi="${poi.id}">
-      <img src="${loadPhoto(poi.id)}" alt="${poi.name}" />
+      <img src="${poi.src || loadPhoto(poi.id)}" alt="${poi.name}" />
       <div class="album-photo-name">${poi.icon} ${poi.name}</div>
     </div>`).join("")}</div>`;
 
