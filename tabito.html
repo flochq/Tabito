@@ -482,6 +482,12 @@ let exploredBands = FOG_BANDS.map((_,i) => {
 });
 let discovered = new Set();
 let totalDist  = parseFloat(localStorage.getItem(`${STORAGE_KEY}-dist`) || "0");
+let freePhotos = [];
+ try {
+  const saved = localStorage.getItem(`${STORAGE_KEY}-freephotos`);
+  if (saved) freePhotos = JSON.parse(saved);
+} catch {}
+let activeCollection = "all";
 let lastPos    = null;
 let followMode = true;
 let allPOIs    = [];
@@ -986,8 +992,7 @@ function savePhotoCollection(poiId, col) {
   try { localStorage.setItem(`${STORAGE_KEY}-photocol-${poiId}`, col); } catch {}
 }
 
-let freePhotos = [];
-let activeCollection = "all";
+
 
 function openAlbum() {
   renderAlbumTabs();
