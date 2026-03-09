@@ -1083,10 +1083,11 @@ function showCollectionPicker(poi) {
         style="width:100%;padding:8px 10px;border-radius:8px;border:1.5px solid rgba(37,99,235,0.25);font-family:'Space Mono',monospace;font-size:0.75rem;color:#1e293b;margin-bottom:16px;box-sizing:border-box;">
         ${colOptions}
       </select>
-      <div style="display:flex;gap:8px;">
+      <div style="display:flex;gap:8px;margin-bottom:8px;">
         <button id="picker-cancel" style="flex:1;padding:10px;border-radius:8px;border:none;background:#f1f5f9;color:#64748b;font-family:'Space Mono',monospace;font-size:0.7rem;cursor:pointer;">Annuler</button>
         <button id="picker-confirm" style="flex:1;padding:10px;border-radius:8px;border:none;background:#2563eb;color:#fff;font-family:'Space Mono',monospace;font-size:0.7rem;cursor:pointer;">Enregistrer ✓</button>
       </div>
+      <button id="picker-delete" style="width:100%;padding:10px;border-radius:8px;border:1.5px solid #fca5a5;background:#fff;color:#ef4444;font-family:'Space Mono',monospace;font-size:0.7rem;cursor:pointer;">🗑️ Supprimer la photo</button>
     </div>`;
 
   document.body.appendChild(modal);
@@ -1108,6 +1109,29 @@ function showCollectionPicker(poi) {
     document.body.removeChild(modal);
     renderAlbumContent();
     showToast("✅", "Photo mise à jour !");
+  });
+  document.getElementById("picker-delete").addEventListener("click", () => {
+    if (!confirm(`Supprimer "${poi.name}" ?`)) return;
+    // Supprimer la photo du localStorage
+    try { localStorage.removeItem(`${STORAGE_KEY}-photo-${poi.id}`); } catch {}
+    try { localStorage.removeItem(`${STORAGE_KEY}-photocol-${poi.id}`); } catch {}
+    // Si c'est une photo libre, la retirer du tableau
+    const fpIdx = freePhotos.findIndex(p => p.id === poi.id);
+    if (fpIdx !== -1) {
+      freePhotos.splice(fpIdx, 1);
+      try { localStorage.setItem(`${STORAGE_KEY}-freephotos`, JSON.stringify(freePhotos)); } catch {}
+    }
+    // Si c'est un POI découvert, le retirer des découvertes
+    if (discovered.has(poi.id)) {
+      discovered.delete(poi.id);
+      try { localStorage.setItem(`${STORAGE_KEY}-disc`, JSON.stringify([...discovered])); } catch {}
+      const m = poiMarkers.get(poi.id);
+      if (m) m.setIcon(L.divIcon({ className:"", html:`<div class="poi-dot">${poi.icon}</div>`, iconSize:[34,34], iconAnchor:[17,17] }));
+    }
+    document.body.removeChild(modal);
+    updateStats();
+    renderAlbumContent();
+    showToast("🗑️", "Photo supprimée !");
   });
   modal.addEventListener("click", e => { if (e.target === modal) document.body.removeChild(modal); });
 }
