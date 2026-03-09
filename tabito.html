@@ -482,12 +482,6 @@ let exploredBands = FOG_BANDS.map((_,i) => {
 });
 let discovered = new Set();
 let totalDist  = parseFloat(localStorage.getItem(`${STORAGE_KEY}-dist`) || "0");
-let freePhotos = [];
- try {
-  const saved = localStorage.getItem(`${STORAGE_KEY}-freephotos`);
-  if (saved) freePhotos = JSON.parse(saved);
-} catch {}
-let activeCollection = "all";
 let lastPos    = null;
 let followMode = true;
 let allPOIs    = [];
@@ -746,7 +740,7 @@ cameraInput.addEventListener("change", (e) => {
     const reader = new FileReader();
     reader.onload = (ev) => {
       savePhoto(id, ev.target.result);
-      freePhotos.push({ id, name:"Photo libre", icon:"📸", lat:lastPos?.lat, lng:lastPos?.lng, desc:"", src:ev.target.result });
+      freePhotos.push({ id, name:"Photo libre", icon:"📸", lat:lastPos?.lat, lng:lastPos?.lng, desc:"" });
       updateStats();
       showToast("📸", "Photo sauvegardée !");
     };
@@ -788,7 +782,7 @@ function hideCameraBtn() {
 
 // Stats
 function updateStats() {
-  const photoCount = [...allPOIs.filter(poi => loadPhoto(poi.id)), ...freePhotos].length;
+  const photoCount = allPOIs.filter(poi => loadPhoto(poi.id)).length;
   document.getElementById("stat-photos").textContent = photoCount;
   document.getElementById("stat-pois").textContent = discovered.size;
   if (cityBoundary) {
@@ -986,13 +980,14 @@ function saveCollections(cols) {
   try { localStorage.setItem(`${STORAGE_KEY}-collections`, JSON.stringify(cols)); } catch {}
 }
 function loadPhotoCollection(poiId) {
-  try { return localStorage.getItem(`${STORAGE_KEY}-photocol-${poiId}`) || "all"; } catch { return "all"; }
+  try { return localStorage.getItem(`${STORAGE_KEY}-photocol-${poiId}`) || "unclassified"; } catch { return "unclassified"; }
 }
 function savePhotoCollection(poiId, col) {
   try { localStorage.setItem(`${STORAGE_KEY}-photocol-${poiId}`, col); } catch {}
 }
 
-
+let freePhotos = [];
+let activeCollection = "all";
 
 function openAlbum() {
   renderAlbumTabs();
@@ -1007,7 +1002,7 @@ function renderAlbumTabs() {
   const collections = loadCollections();
   const tabs = document.getElementById("album-tabs");
   // Keep "Toutes" and "+" button, rebuild custom tabs
-  tabs.innerHTML = `<button class="album-tab${activeCollection==="all"?" active":""}" data-collection="all">Toutes</button>`;
+  tabs.innerHTML = `<button class="album-tab${activeCollection==="all"?" active":""}" data-collection="all">Toutes</button><button class="album-tab${activeCollection==="unclassified"?" active":""}" data-collection="unclassified">Non classé</button>`;
   collections.forEach(col => {
     tabs.innerHTML += `<button class="album-tab${activeCollection===col?" active":""}" data-collection="${col}">${col}</button>`;
   });
@@ -1034,6 +1029,8 @@ function renderAlbumContent() {
 
   const filtered = activeCollection === "all"
     ? photoPOIs
+    : activeCollection === "unclassified"
+    ? photoPOIs.filter(poi => loadPhotoCollection(poi.id) === "unclassified")
     : photoPOIs.filter(poi => loadPhotoCollection(poi.id) === activeCollection);
 
   if (filtered.length === 0) {
@@ -1043,14 +1040,14 @@ function renderAlbumContent() {
 
   content.innerHTML = `<div class="album-grid">${filtered.map(poi => `
     <div class="album-photo-card" data-poi="${poi.id}">
-      <img src="${poi.src || loadPhoto(poi.id)}" alt="${poi.name}" />
+      <img src="${loadPhoto(poi.id)}" alt="${poi.name}" />
       <div class="album-photo-name">${poi.icon} ${poi.name}</div>
     </div>`).join("")}</div>`;
 
   // Long press or click to move to collection
   content.querySelectorAll(".album-photo-card").forEach(card => {
     card.addEventListener("click", () => {
-      const poi = [...allPOIs, ...freePhotos].find(p => p.id === card.dataset.poi);
+      const poi = allPOIs.find(p => p.id === card.dataset.poi);
       if (!poi) return;
       showCollectionPicker(poi);
     });
@@ -1059,30 +1056,55 @@ function renderAlbumContent() {
 
 function showCollectionPicker(poi) {
   const collections = loadCollections();
-  if (collections.length === 0) {
-    showToast("💡", "Crée d'abord une collection avec le bouton +");
-    return;
-  }
   const current = loadPhotoCollection(poi.id);
-  const options = ["all", ...collections].map(col =>
-    `<option value="${col}"${current===col?" selected":""}>${col==="all"?"Toutes":col}</option>`
+  const currentName = poi.name;
+
+  // Build modal HTML
+  const modal = document.createElement("div");
+  modal.style.cssText = "position:fixed;inset:0;z-index:2000;background:rgba(0,0,0,0.45);display:flex;align-items:center;justify-content:center;";
+  
+  const colOptions = ["unclassified", ...collections].map(col =>
+    `<option value="${col}"${current===col?" selected":""}>${col==="unclassified"?"Non classé":col}</option>`
   ).join("");
 
-  // Simple select via prompt-like approach using a quick modal reuse
-  const sel = document.createElement("select");
-  sel.innerHTML = options;
-  sel.style.cssText = "position:fixed;bottom:50%;left:50%;transform:translate(-50%,50%);z-index:2000;padding:10px;font-size:1rem;border-radius:8px;border:2px solid #2563eb;";
-  document.body.appendChild(sel);
-  sel.focus();
-  sel.addEventListener("change", () => {
-    savePhotoCollection(poi.id, sel.value);
-    document.body.removeChild(sel);
+  modal.innerHTML = `
+    <div style="background:#fff;border-radius:16px;padding:20px;width:min(320px,85vw);box-shadow:0 8px 32px rgba(0,0,0,0.2);">
+      <h3 style="font-family:'Syne',sans-serif;font-weight:700;font-size:1rem;color:#1e293b;margin-bottom:14px;">✏️ Modifier la photo</h3>
+      <label style="font-family:'Space Mono',monospace;font-size:0.65rem;color:#64748b;display:block;margin-bottom:4px;">NOM</label>
+      <input id="rename-input" value="${currentName}" maxlength="40"
+        style="width:100%;padding:8px 10px;border-radius:8px;border:1.5px solid rgba(37,99,235,0.25);font-family:'Space Mono',monospace;font-size:0.75rem;color:#1e293b;margin-bottom:12px;box-sizing:border-box;" />
+      <label style="font-family:'Space Mono',monospace;font-size:0.65rem;color:#64748b;display:block;margin-bottom:4px;">COLLECTION</label>
+      <select id="col-select"
+        style="width:100%;padding:8px 10px;border-radius:8px;border:1.5px solid rgba(37,99,235,0.25);font-family:'Space Mono',monospace;font-size:0.75rem;color:#1e293b;margin-bottom:16px;box-sizing:border-box;">
+        ${colOptions}
+      </select>
+      <div style="display:flex;gap:8px;">
+        <button id="picker-cancel" style="flex:1;padding:10px;border-radius:8px;border:none;background:#f1f5f9;color:#64748b;font-family:'Space Mono',monospace;font-size:0.7rem;cursor:pointer;">Annuler</button>
+        <button id="picker-confirm" style="flex:1;padding:10px;border-radius:8px;border:none;background:#2563eb;color:#fff;font-family:'Space Mono',monospace;font-size:0.7rem;cursor:pointer;">Enregistrer ✓</button>
+      </div>
+    </div>`;
+
+  document.body.appendChild(modal);
+  document.getElementById("rename-input").focus();
+
+  document.getElementById("picker-cancel").addEventListener("click", () => document.body.removeChild(modal));
+  document.getElementById("picker-confirm").addEventListener("click", () => {
+    const newName = document.getElementById("rename-input").value.trim() || currentName;
+    const newCol = document.getElementById("col-select").value;
+    // Update name
+    poi.name = newName;
+    // If it's a free photo, update in freePhotos array and localStorage
+    const fp = freePhotos.find(p => p.id === poi.id);
+    if (fp) {
+      fp.name = newName;
+      try { localStorage.setItem(`${STORAGE_KEY}-freephotos`, JSON.stringify(freePhotos)); } catch {}
+    }
+    savePhotoCollection(poi.id, newCol);
+    document.body.removeChild(modal);
     renderAlbumContent();
-    showToast("✅", `Photo déplacée !`);
+    showToast("✅", "Photo mise à jour !");
   });
-  sel.addEventListener("blur", () => {
-    if (document.body.contains(sel)) document.body.removeChild(sel);
-  });
+  modal.addEventListener("click", e => { if (e.target === modal) document.body.removeChild(modal); });
 }
 
 // Album open/close
