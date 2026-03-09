@@ -693,7 +693,7 @@ async function fetchCityBoundary(lng, lat) {
 function computeCoveragePercent() {
   if (!cityBoundary || !exploredBands[0]) return 0;
   try {
-    const intersection = turf.intersect(turf.featureCollection([exploredBands[0], cityBoundary]));
+    const intersection = turf.intersect(exploredBands[0], cityBoundary);
     if (!intersection) return 0;
     const exploredArea = turf.area(intersection) / 1e6;
     return Math.min(100, (exploredArea / cityArea) * 100);
@@ -740,14 +740,12 @@ cameraInput.addEventListener("change", (e) => {
     const reader = new FileReader();
     reader.onload = (ev) => {
       savePhoto(id, ev.target.result);
-      allPOIs.push({ id, name:"Photo libre", icon:"📸", lat:lastPos?.lat, lng:lastPos?.lng, desc:"" });
+      freePhotos.push({ id, name:"Photo libre", icon:"📸", lat:lastPos?.lat, lng:lastPos?.lng, desc:"" });
       updateStats();
       showToast("📸", "Photo sauvegardée !");
     };
     reader.readAsDataURL(file);
     cameraInput.value = "";
-    nearbyPOI = null;
-    hideCameraBtn();
     return;
   }
   const reader = new FileReader();
@@ -988,6 +986,7 @@ function savePhotoCollection(poiId, col) {
   try { localStorage.setItem(`${STORAGE_KEY}-photocol-${poiId}`, col); } catch {}
 }
 
+let freePhotos = [];
 let activeCollection = "all";
 
 function openAlbum() {
@@ -1026,7 +1025,7 @@ function renderAlbumTabs() {
 function renderAlbumContent() {
   const content = document.getElementById("album-content");
   // Get all POIs with photos
-  const photoPOIs = allPOIs.filter(poi => loadPhoto(poi.id));
+  const photoPOIs = [...allPOIs.filter(poi => loadPhoto(poi.id)), ...freePhotos];
 
   const filtered = activeCollection === "all"
     ? photoPOIs
