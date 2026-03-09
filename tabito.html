@@ -485,7 +485,7 @@ let totalDist  = parseFloat(localStorage.getItem(`${STORAGE_KEY}-dist`) || "0");
 let freePhotos = [];
 try {
   const saved = localStorage.getItem(`${STORAGE_KEY}-freephotos`);
-  if (saved) freePhotos = JSON.parse(saved);
+  if (saved) freePhotos = JSON.parse(saved).map(p => ({ ...p, src: p.src || loadPhoto(p.id) }));
 } catch {}
 let activeCollection = "all";
 let lastPos    = null;
@@ -746,7 +746,9 @@ cameraInput.addEventListener("change", (e) => {
     const reader = new FileReader();
     reader.onload = (ev) => {
       savePhoto(id, ev.target.result);
-      freePhotos.push({ id, name:"Photo libre", icon:"📸", lat:lastPos?.lat, lng:lastPos?.lng, desc:"", src:ev.target.result });
+      const fp = { id, name:"Photo libre", icon:"📸", lat:lastPos?.lat, lng:lastPos?.lng, desc:"", src:ev.target.result };
+      freePhotos.push(fp);
+      try { localStorage.setItem(`${STORAGE_KEY}-freephotos`, JSON.stringify(freePhotos)); } catch {}
       updateStats();
       showToast("📸", "Photo sauvegardée !");
     };
