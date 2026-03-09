@@ -782,7 +782,7 @@ function hideCameraBtn() {
 
 // Stats
 function updateStats() {
-  const photoCount = allPOIs.filter(poi => loadPhoto(poi.id)).length;
+  const photoCount = [...allPOIs.filter(poi => loadPhoto(poi.id)), ...freePhotos].length;
   document.getElementById("stat-photos").textContent = photoCount;
   document.getElementById("stat-pois").textContent = discovered.size;
   if (cityBoundary) {
@@ -1045,7 +1045,7 @@ function renderAlbumContent() {
   // Long press or click to move to collection
   content.querySelectorAll(".album-photo-card").forEach(card => {
     card.addEventListener("click", () => {
-      const poi = allPOIs.find(p => p.id === card.dataset.poi);
+      const poi = [...allPOIs, ...freePhotos].find(p => p.id === card.dataset.poi);
       if (!poi) return;
       showCollectionPicker(poi);
     });
