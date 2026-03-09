@@ -553,7 +553,7 @@ async function fetchCityBoundary(lng, lat) {
 function computeCoveragePercent() {
   if (!cityBoundary || !exploredBands[0]) return 0;
   try {
-    const intersection = turf.intersect(turf.featureCollection([exploredBands[0], cityBoundary]));
+    const intersection = turf.intersect(exploredBands[0], cityBoundary);
     if (!intersection) return 0;
     const exploredArea = turf.area(intersection) / 1e6;
     return Math.min(100, (exploredArea / cityArea) * 100);
