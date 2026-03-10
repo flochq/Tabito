@@ -485,7 +485,10 @@ let totalDist  = parseFloat(localStorage.getItem(`${STORAGE_KEY}-dist`) || "0");
 let freePhotos = [];
 try {
   const saved = localStorage.getItem(`${STORAGE_KEY}-freephotos`);
-  if (saved) freePhotos = JSON.parse(saved).map(p => ({ ...p, src: p.src || loadPhoto(p.id) }));
+  if (saved) freePhotos = JSON.parse(saved).map(p => {
+    const src = (() => { try { return localStorage.getItem(`${STORAGE_KEY}-photo-${p.id}`); } catch { return null; } })();
+    return { ...p, src: p.src || src };
+  });
 } catch {}
 let activeCollection = "all";
 let lastPos    = null;
@@ -493,6 +496,18 @@ let followMode = true;
 let allPOIs    = [];
 let localAdded = false;
 try { const s = localStorage.getItem(`${STORAGE_KEY}-disc`); if(s) JSON.parse(s).forEach(id => discovered.add(id)); } catch {}
+// Reconstruire les POIs découverts depuis leurs photos sauvegardées
+try {
+  const keys = Object.keys(localStorage).filter(k => k.startsWith(`${STORAGE_KEY}-photo-osm-`));
+  keys.forEach(k => {
+    const id = k.replace(`${STORAGE_KEY}-photo-`, "");
+    if (!allPOIs.find(p => p.id === id)) {
+      const name = localStorage.getItem(`${STORAGE_KEY}-poiname-${id}`) || "Monument";
+      const icon = localStorage.getItem(`${STORAGE_KEY}-poiicon-${id}`) || "📍";
+      allPOIs.push({ id, name, icon, desc:"", lat:0, lng:0, src: loadPhoto(id) });
+    }
+  });
+} catch {}
 
 // Map init
 const map = L.map("map", { zoomControl:false, attributionControl:false }).setView([48.8566, 2.3522], 15);
@@ -761,9 +776,12 @@ cameraInput.addEventListener("change", (e) => {
     const dataUrl = ev.target.result;
     savePhoto(nearbyPOI.id, dataUrl);
     // Mark as discovered
+    // Mark as discovered
     if (!discovered.has(nearbyPOI.id)) {
       discovered.add(nearbyPOI.id);
       try { localStorage.setItem(`${STORAGE_KEY}-disc`, JSON.stringify([...discovered])); } catch {}
+      try { localStorage.setItem(`${STORAGE_KEY}-poiname-${nearbyPOI.id}`, nearbyPOI.name); } catch {}
+      try { localStorage.setItem(`${STORAGE_KEY}-poiicon-${nearbyPOI.id}`, nearbyPOI.icon); } catch {}
       const m = poiMarkers.get(nearbyPOI.id);
       if (m) m.setIcon(L.divIcon({ className:"", html:`<div class="poi-dot discovered">${nearbyPOI.icon}</div>`, iconSize:[34,34], iconAnchor:[17,17] }));
       updateStats();
