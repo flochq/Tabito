@@ -317,7 +317,7 @@
 <div id="stats">
   <div class="stat-chip"><span class="stat-val" id="stat-photos">0</span><span class="stat-lbl">photos</span></div>
   <div class="stat-chip"><span class="stat-val" id="stat-pois">0</span><span class="stat-lbl">découvertes</span></div>
-  <div class="stat-chip" id="stat-city-chip" style="display:none">
+  <div class="stat-chip" id="stat-city-chip" style="display:none;cursor:pointer">
     <span class="stat-val" id="stat-coverage">0%</span>
     <span class="stat-lbl" id="city-name">ville</span>
   </div>
@@ -326,6 +326,20 @@
 <div id="loading"><h2>Tabito</h2><div class="spinner"></div><p>Chargement…</p></div>
 <div id="perm-banner">📍 Autorisez la localisation pour explorer</div>
 <div id="toast"><div class="toast-inner"><span class="t-icon"></span><span class="t-text"></span></div></div>
+
+<!-- Cities panel -->
+<div id="cities-panel" style="
+  position:absolute; inset:0; z-index:1100;
+  background:rgba(248,250,252,0.98); display:none;
+  flex-direction:column; overflow:hidden;
+  backdrop-filter:blur(12px);
+">
+  <div style="display:flex;align-items:center;justify-content:space-between;padding:16px;border-bottom:1px solid rgba(0,0,0,0.07);">
+    <h2 style="font-family:'Syne',sans-serif;font-weight:800;font-size:1.1rem;color:#1e293b;">🗺️ Mes explorations</h2>
+    <button id="cities-close" style="background:none;border:none;font-size:1.2rem;cursor:pointer;color:#64748b;">✕</button>
+  </div>
+  <div id="cities-content" style="flex:1;overflow-y:auto;padding:16px;display:flex;flex-direction:column;gap:10px;"></div>
+</div>
 
 <!-- Route planner -->
 <div id="route-panel">
@@ -688,6 +702,10 @@ async function fetchCityBoundary(lng, lat) {
 
     const cityName = rel.tags?.["name:fr"] || rel.tags?.name || "Votre ville";
     document.getElementById("city-name").textContent = cityName;
+
+    // Persist this city in the visited-cities registry
+    saveCityRecord(cityName, polygon, cityArea);
+
     updateStats();
     return polygon;
   } catch(e) { console.warn("City boundary unavailable", e); return null; }
@@ -799,6 +817,74 @@ function updateStats() {
   }
 }
 updateStats();
+
+// ── CITIES REGISTRY ───────────────────────────────────────────────────
+function loadCitiesRegistry() {
+  try { return JSON.parse(localStorage.getItem(`${STORAGE_KEY}-cities`) || "{}"); } catch { return {}; }
+}
+function saveCityRecord(name, polygon, area) {
+  const registry = loadCitiesRegistry();
+  // Use name as key (slugified)
+  const key = name.toLowerCase().replace(/\s+/g, "-");
+  if (!registry[key]) registry[key] = { name, area, polygon };
+  // Always update polygon (it might have been saved without one before)
+  registry[key].polygon = polygon;
+  registry[key].area = area;
+  try { localStorage.setItem(`${STORAGE_KEY}-cities`, JSON.stringify(registry)); } catch {}
+}
+function computeCityExplored(polygon, area) {
+  if (!exploredBands[0] || !polygon || !area) return 0;
+  try {
+    const intersection = turf.intersect(exploredBands[0], polygon);
+    if (!intersection) return 0;
+    return Math.min(100, (turf.area(intersection) / 1e6 / area) * 100);
+  } catch { return 0; }
+}
+
+function openCitiesPanel() {
+  const registry = loadCitiesRegistry();
+  const keys = Object.keys(registry);
+  const content = document.getElementById("cities-content");
+
+  if (keys.length === 0) {
+    content.innerHTML = `<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:200px;gap:12px;color:#94a3b8;font-family:'Space Mono',monospace;font-size:0.7rem;text-align:center;">
+      <span style="font-size:2.5rem;">🏙️</span>
+      <p>Aucune ville explorée pour l'instant.<br>Marche un peu et reviens !</p>
+    </div>`;
+  } else {
+    content.innerHTML = keys.map(key => {
+      const city = registry[key];
+      const pct = computeCityExplored(city.polygon, city.area);
+      const pctStr = pct < 0.1 ? "<0.1%" : pct.toFixed(1) + "%";
+      const barWidth = Math.max(2, Math.min(100, pct));
+      const isCurrent = cityBoundary && city.name === document.getElementById("city-name").textContent;
+      return `<div style="
+        background:#fff; border-radius:14px; padding:16px 18px;
+        border:1.5px solid ${isCurrent ? "#2563eb" : "rgba(37,99,235,0.12)"};
+        box-shadow:0 2px 8px rgba(0,0,0,0.05);
+      ">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+          <div style="font-family:'Syne',sans-serif;font-weight:700;font-size:0.95rem;color:#1e293b;">
+            ${isCurrent ? "📍 " : "🏙️ "}${city.name}
+          </div>
+          <div style="font-family:'Syne',sans-serif;font-weight:800;font-size:1.1rem;color:#2563eb;">${pctStr}</div>
+        </div>
+        <div style="background:#e2e8f0;border-radius:99px;height:6px;overflow:hidden;">
+          <div style="width:${barWidth}%;height:100%;background:linear-gradient(90deg,#2563eb,#0ea5e9);border-radius:99px;transition:width 0.6s ease;"></div>
+        </div>
+        <div style="font-family:'Space Mono',monospace;font-size:0.6rem;color:#94a3b8;margin-top:6px;">
+          ${city.area ? city.area.toFixed(1) + " km² de superficie" : ""}
+        </div>
+      </div>`;
+    }).join("");
+  }
+  document.getElementById("cities-panel").style.display = "flex";
+}
+
+document.getElementById("stat-city-chip").addEventListener("click", openCitiesPanel);
+document.getElementById("cities-close").addEventListener("click", () => {
+  document.getElementById("cities-panel").style.display = "none";
+});
 
 // Toast
 let toastTimer;
