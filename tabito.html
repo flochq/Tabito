@@ -482,32 +482,11 @@ let exploredBands = FOG_BANDS.map((_,i) => {
 });
 let discovered = new Set();
 let totalDist  = parseFloat(localStorage.getItem(`${STORAGE_KEY}-dist`) || "0");
-let freePhotos = [];
-try {
-  const saved = localStorage.getItem(`${STORAGE_KEY}-freephotos`);
-  if (saved) freePhotos = JSON.parse(saved).map(p => {
-    const src = (() => { try { return localStorage.getItem(`${STORAGE_KEY}-photo-${p.id}`); } catch { return null; } })();
-    return { ...p, src: p.src || src };
-  });
-} catch {}
-let activeCollection = "all";
 let lastPos    = null;
 let followMode = true;
 let allPOIs    = [];
 let localAdded = false;
 try { const s = localStorage.getItem(`${STORAGE_KEY}-disc`); if(s) JSON.parse(s).forEach(id => discovered.add(id)); } catch {}
-// Reconstruire les POIs découverts depuis leurs photos sauvegardées
-try {
-  const keys = Object.keys(localStorage).filter(k => k.startsWith(`${STORAGE_KEY}-photo-osm-`));
-  keys.forEach(k => {
-    const id = k.replace(`${STORAGE_KEY}-photo-`, "");
-    if (!allPOIs.find(p => p.id === id)) {
-      const name = localStorage.getItem(`${STORAGE_KEY}-poiname-${id}`) || "Monument";
-      const icon = localStorage.getItem(`${STORAGE_KEY}-poiicon-${id}`) || "📍";
-      allPOIs.push({ id, name, icon, desc:"", lat:0, lng:0, src: loadPhoto(id) });
-    }
-  });
-} catch {}
 
 // Map init
 const map = L.map("map", { zoomControl:false, attributionControl:false }).setView([48.8566, 2.3522], 15);
@@ -776,7 +755,6 @@ cameraInput.addEventListener("change", (e) => {
     const dataUrl = ev.target.result;
     savePhoto(nearbyPOI.id, dataUrl);
     // Mark as discovered
-    // Mark as discovered
     if (!discovered.has(nearbyPOI.id)) {
       discovered.add(nearbyPOI.id);
       try { localStorage.setItem(`${STORAGE_KEY}-disc`, JSON.stringify([...discovered])); } catch {}
@@ -808,7 +786,7 @@ function hideCameraBtn() {
 
 // Stats
 function updateStats() {
-  const photoCount = [...allPOIs.filter(poi => loadPhoto(poi.id)), ...freePhotos].length;
+  const photoCount = allPOIs.filter(poi => loadPhoto(poi.id)).length;
   document.getElementById("stat-photos").textContent = photoCount;
   document.getElementById("stat-pois").textContent = discovered.size;
   if (cityBoundary) {
@@ -1011,7 +989,17 @@ function loadPhotoCollection(poiId) {
 function savePhotoCollection(poiId, col) {
   try { localStorage.setItem(`${STORAGE_KEY}-photocol-${poiId}`, col); } catch {}
 }
- 
+
+let freePhotos = [];
+try {
+  const saved = localStorage.getItem(`${STORAGE_KEY}-freephotos`);
+  if (saved) freePhotos = JSON.parse(saved).map(p => {
+    const src = (() => { try { return localStorage.getItem(`${STORAGE_KEY}-photo-${p.id}`); } catch { return null; } })();
+    return { ...p, src: p.src || src };
+  });
+} catch {}
+let activeCollection = "all";
+
 function openAlbum() {
   renderAlbumTabs();
   renderAlbumContent();
@@ -1048,7 +1036,16 @@ function renderAlbumTabs() {
 function renderAlbumContent() {
   const content = document.getElementById("album-content");
   // Get all POIs with photos
-  const photoPOIs = [...allPOIs.filter(poi => loadPhoto(poi.id)), ...freePhotos];
+  const loadedPOIs = allPOIs.filter(poi => loadPhoto(poi.id));
+  const ghostPOIs = [...discovered]
+    .filter(id => !allPOIs.find(p => p.id === id) && loadPhoto(id))
+    .map(id => ({
+      id,
+      name: localStorage.getItem(`${STORAGE_KEY}-poiname-${id}`) || "Monument",
+      icon: localStorage.getItem(`${STORAGE_KEY}-poiicon-${id}`) || "📍",
+      desc: "", lat: 0, lng: 0
+    }));
+  const photoPOIs = [...loadedPOIs, ...ghostPOIs, ...freePhotos];
 
   const filtered = activeCollection === "all"
     ? photoPOIs
@@ -1130,16 +1127,13 @@ function showCollectionPicker(poi) {
   });
   document.getElementById("picker-delete").addEventListener("click", () => {
     if (!confirm(`Supprimer "${poi.name}" ?`)) return;
-    // Supprimer la photo du localStorage
     try { localStorage.removeItem(`${STORAGE_KEY}-photo-${poi.id}`); } catch {}
     try { localStorage.removeItem(`${STORAGE_KEY}-photocol-${poi.id}`); } catch {}
-    // Si c'est une photo libre, la retirer du tableau
     const fpIdx = freePhotos.findIndex(p => p.id === poi.id);
     if (fpIdx !== -1) {
       freePhotos.splice(fpIdx, 1);
       try { localStorage.setItem(`${STORAGE_KEY}-freephotos`, JSON.stringify(freePhotos)); } catch {}
     }
-    // Si c'est un POI découvert, le retirer des découvertes
     if (discovered.has(poi.id)) {
       discovered.delete(poi.id);
       try { localStorage.setItem(`${STORAGE_KEY}-disc`, JSON.stringify([...discovered])); } catch {}
