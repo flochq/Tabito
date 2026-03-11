@@ -5,6 +5,16 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
 <title>Tabito — Explorez l'inconnu</title>
+
+<!-- PWA -->
+<link rel="manifest" href="/Tabito/manifest.json" />
+<meta name="theme-color" content="#2563eb" />
+<meta name="mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<meta name="apple-mobile-web-app-title" content="Tabito" />
+<link rel="apple-touch-icon" href="/Tabito/apple-touch-icon.png" />
+<meta name="description" content="Explorez votre ville, révélez la carte au fil de vos pas." />
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script src="https://unpkg.com/@turf/turf@6.5.0/turf.min.js"></script>
@@ -1333,6 +1343,15 @@ if (!("geolocation" in navigator)) {
     checkPOIs(lng, lat);
     updateStats();
   }, () => {}, { enableHighAccuracy:true, maximumAge:2000, timeout:10000 });
+}
+
+// ── SERVICE WORKER ────────────────────────────────────────────────────
+if ("serviceWorker" in navigator) {
+  window.addEventListener("load", () => {
+    navigator.serviceWorker.register("/Tabito/sw.js")
+      .then(reg => console.log("SW registered:", reg.scope))
+      .catch(err => console.warn("SW registration failed:", err));
+  });
 }
 </script>
 </body>
