@@ -835,7 +835,9 @@ function saveCityRecord(name, polygon, area) {
 function computeCityExplored(polygon, area) {
   if (!exploredBands[0] || !polygon || !area) return 0;
   try {
-    const intersection = turf.intersect(exploredBands[0], polygon);
+    // Rehydrate from plain JSON if needed (localStorage returns plain objects)
+    const poly = polygon.type === "Feature" ? polygon : turf.feature(polygon);
+    const intersection = turf.intersect(exploredBands[0], poly);
     if (!intersection) return 0;
     return Math.min(100, (turf.area(intersection) / 1e6 / area) * 100);
   } catch { return 0; }
@@ -852,11 +854,15 @@ function openCitiesPanel() {
       <p>Aucune ville explorée pour l'instant.<br>Marche un peu et reviens !</p>
     </div>`;
   } else {
-    content.innerHTML = keys.map(key => {
+    const cities = keys.map(key => {
       const city = registry[key];
       const pct = computeCityExplored(city.polygon, city.area);
-      const pctStr = pct < 0.1 ? "<0.1%" : pct.toFixed(1) + "%";
-      const barWidth = Math.max(2, Math.min(100, pct));
+      return { ...city, pct };
+    }).sort((a, b) => b.pct - a.pct);
+
+    content.innerHTML = cities.map(city => {
+      const pctStr = city.pct < 0.1 ? "<0.1%" : city.pct.toFixed(1) + "%";
+      const barWidth = Math.max(2, Math.min(100, city.pct));
       const isCurrent = cityBoundary && city.name === document.getElementById("city-name").textContent;
       return `<div style="
         background:#fff; border-radius:14px; padding:16px 18px;
