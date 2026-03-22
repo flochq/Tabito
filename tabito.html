@@ -515,6 +515,16 @@ let allPOIs    = [];
 let localAdded = false;
 try { const s = localStorage.getItem(`${STORAGE_KEY}-disc`); if(s) JSON.parse(s).forEach(id => discovered.add(id)); } catch {}
 
+// freePhotos chargées dès le départ (avant updateStats)
+let freePhotos = [];
+try {
+  const saved = localStorage.getItem(`${STORAGE_KEY}-freephotos`);
+  if (saved) freePhotos = JSON.parse(saved).map(p => {
+    const src = (() => { try { return localStorage.getItem(`${STORAGE_KEY}-photo-${p.id}`); } catch { return null; } })();
+    return { ...p, src: p.src || src };
+  });
+} catch {}
+
 // Map init
 const map = L.map("map", { zoomControl:false, attributionControl:false }).setView([48.8566, 2.3522], 15);
 L.tileLayer("https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png", { maxZoom:19, subdomains:"abcd" }).addTo(map);
@@ -817,7 +827,9 @@ function hideCameraBtn() {
 
 // Stats
 function updateStats() {
-  const photoCount = allPOIs.filter(poi => loadPhoto(poi.id)).length;
+  // Photos POI découverts (allPOIs chargés + ghost POIs d'autres villes)
+  const poiPhotoCount = [...discovered].filter(id => loadPhoto(id)).length;
+  const photoCount = poiPhotoCount + freePhotos.length;
   document.getElementById("stat-photos").textContent = photoCount;
   document.getElementById("stat-pois").textContent = discovered.size;
   if (cityBoundary) {
@@ -1119,14 +1131,6 @@ function savePhotoCollection(poiId, col) {
   try { localStorage.setItem(`${STORAGE_KEY}-photocol-${poiId}`, col); } catch {}
 }
 
-let freePhotos = [];
-try {
-  const saved = localStorage.getItem(`${STORAGE_KEY}-freephotos`);
-  if (saved) freePhotos = JSON.parse(saved).map(p => {
-    const src = (() => { try { return localStorage.getItem(`${STORAGE_KEY}-photo-${p.id}`); } catch { return null; } })();
-    return { ...p, src: p.src || src };
-  });
-} catch {}
 let activeCollection = "all";
 
 function openAlbum() {
