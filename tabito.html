@@ -315,6 +315,52 @@
   #modal-confirm { background: #2563eb; color: #fff; }
   #modal-cancel { background: #f1f5f9; color: #64748b; }
 
+
+  /* ── GACHA ─────────────────────────────────────────────────────── */
+  @keyframes card-flip {
+    0%   { transform: rotateY(90deg) scale(0.8); opacity:0; }
+    60%  { transform: rotateY(-8deg) scale(1.05); opacity:1; }
+    100% { transform: rotateY(0deg) scale(1); opacity:1; }
+  }
+  @keyframes shimmer {
+    0%   { background-position: -200% center; }
+    100% { background-position:  200% center; }
+  }
+  .gacha-card {
+    border-radius: 16px; padding: 18px 16px 14px;
+    width: 220px; position: relative; overflow: hidden;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.18);
+    font-family: 'Syne', sans-serif; cursor: pointer;
+  }
+  .gacha-card.common  { background: linear-gradient(135deg,#f1f5f9,#e2e8f0); border: 2px solid #94a3b8; }
+  .gacha-card.rare    { background: linear-gradient(135deg,#dbeafe,#bfdbfe); border: 2px solid #3b82f6; }
+  .gacha-card.epic    { background: linear-gradient(135deg,#fef3c7,#fde68a); border: 2px solid #f59e0b;
+                        background-size: 200% auto; animation: shimmer 2.5s linear infinite; }
+  .gacha-card.legendary { background: linear-gradient(135deg,#f5d0fe,#e879f9,#a78bfa);
+                        border: 2px solid #a855f7; background-size: 200% auto; animation: shimmer 2s linear infinite; }
+  .gacha-card-rarity  { font-size:0.55rem; letter-spacing:0.18em; text-transform:uppercase; opacity:0.7; margin-bottom:8px; font-family:'Space Mono',monospace; }
+  .gacha-card-emoji   { font-size:2.4rem; margin-bottom:6px; display:block; }
+  .gacha-card-name    { font-size:1rem; font-weight:800; color:#1e293b; margin-bottom:2px; }
+  .gacha-card-region  { font-size:0.6rem; color:#64748b; font-family:'Space Mono',monospace; margin-bottom:10px; }
+  .gacha-card-stat    { font-size:0.6rem; font-family:'Space Mono',monospace; color:#475569; display:flex; justify-content:space-between; margin-top:4px; }
+  .gacha-card-badge   { position:absolute; top:10px; right:10px; font-size:0.55rem; padding:2px 7px; border-radius:99px; font-family:'Space Mono',monospace; }
+  .gacha-card.common .gacha-card-badge  { background:#94a3b8; color:#fff; }
+  .gacha-card.rare   .gacha-card-badge  { background:#3b82f6; color:#fff; }
+  .gacha-card.epic   .gacha-card-badge  { background:#f59e0b; color:#fff; }
+  .gacha-card.legendary .gacha-card-badge { background:#a855f7; color:#fff; }
+  /* Mini card in collection */
+  .gacha-mini { border-radius:10px; padding:10px 8px; text-align:center; cursor:pointer; transition:transform 0.15s; }
+  .gacha-mini:hover { transform:scale(1.04); }
+  .gacha-mini.common  { background:#f1f5f9; border:1.5px solid #94a3b8; }
+  .gacha-mini.rare    { background:#dbeafe; border:1.5px solid #3b82f6; }
+  .gacha-mini.epic    { background:#fef3c7; border:1.5px solid #f59e0b; }
+  .gacha-mini.legendary { background:#f5d0fe; border:1.5px solid #a855f7; }
+  .gacha-mini-emoji   { font-size:1.4rem; display:block; }
+  .gacha-mini-name    { font-size:0.52rem; font-family:'Space Mono',monospace; color:#1e293b; margin-top:4px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  /* Token dots */
+  .gacha-token { width:12px; height:12px; border-radius:50%; background:#2563eb; transition:all 0.3s; }
+  .gacha-token.empty { background:#e2e8f0; }
+
   .leaflet-control-attribution { display: none; }
   .leaflet-control-zoom { display: none; }
 </style>
@@ -330,6 +376,11 @@
   <div class="stat-chip" id="stat-city-chip" style="display:none;cursor:pointer">
     <span class="stat-val" id="stat-coverage">0%</span>
     <span class="stat-lbl" id="city-name">ville</span>
+  </div>
+  <div class="stat-chip" id="gacha-chip" style="cursor:pointer;position:relative;">
+    <span class="stat-val" id="stat-draws">0</span>
+    <span class="stat-lbl">tirages</span>
+    <span id="gacha-dot" style="display:none;position:absolute;top:-4px;right:-4px;width:9px;height:9px;border-radius:50%;background:#f59e0b;"></span>
   </div>
 </div>
 
@@ -868,6 +919,11 @@ function updateStats() {
     const pct = computeCoveragePercent();
     document.getElementById("stat-coverage").textContent = pct < 0.1 ? "<0.1%" : pct.toFixed(1)+"%";
     document.getElementById("stat-city-chip").style.display = "flex";
+    // Check 100% completion for bonus card
+    if (pct >= 100 && !localStorage.getItem(`${STORAGE_KEY}-100pct-${document.getElementById("city-name").textContent}`)) {
+      localStorage.setItem(`${STORAGE_KEY}-100pct-${document.getElementById("city-name").textContent}`, "1");
+      if (typeof grantCityCompletionCard === "function") grantCityCompletionCard(document.getElementById("city-name").textContent);
+    }
   }
 }
 updateStats();
@@ -1370,6 +1426,8 @@ if (!("geolocation" in navigator)) {
       if (d > 0.005) {
         totalDist += d;
         try { localStorage.setItem(`${STORAGE_KEY}-dist`, totalDist.toString()); } catch {}
+        // Check if new walk draws unlocked
+        refreshGachaDraws();
       }
     }
     lastPos = { lng, lat };
@@ -1381,6 +1439,320 @@ if (!("geolocation" in navigator)) {
   }, () => {}, { enableHighAccuracy:true, maximumAge:2000, timeout:10000 });
 }
 
+
+// ── GACHA SYSTEM ──────────────────────────────────────────────────────
+
+// Villes françaises > 50 000 hab avec raretés
+// rarity: common=50k-150k, rare=150k-500k, epic=500k-2M, legendary=2M+
+const GACHA_CITIES = [
+  // LEGENDARY (Paris)
+  {name:"Paris",region:"Île-de-France",pop:2161000,emoji:"🗼",rarity:"legendary"},
+  // EPIC (500k-2M)
+  {name:"Marseille",region:"Provence-Alpes-Côte d'Azur",pop:870731,emoji:"⚓",rarity:"epic"},
+  {name:"Lyon",region:"Auvergne-Rhône-Alpes",pop:522228,emoji:"🦁",rarity:"epic"},
+  {name:"Toulouse",region:"Occitanie",pop:493465,emoji:"🌹",rarity:"epic"},
+  {name:"Nice",region:"Provence-Alpes-Côte d'Azur",pop:342522,emoji:"🌊",rarity:"rare"},
+  {name:"Nantes",region:"Pays de la Loire",pop:320732,emoji:"🐘",rarity:"rare"},
+  {name:"Strasbourg",region:"Grand Est",pop:284677,emoji:"🥨",rarity:"rare"},
+  {name:"Montpellier",region:"Occitanie",pop:290053,emoji:"🌿",rarity:"rare"},
+  {name:"Bordeaux",region:"Nouvelle-Aquitaine",pop:257804,emoji:"🍷",rarity:"rare"},
+  {name:"Lille",region:"Hauts-de-France",pop:236234,emoji:"🍺",rarity:"rare"},
+  {name:"Rennes",region:"Bretagne",pop:220488,emoji:"🦞",rarity:"rare"},
+  {name:"Reims",region:"Grand Est",pop:182592,emoji:"🥂",rarity:"rare"},
+  {name:"Saint-Étienne",region:"Auvergne-Rhône-Alpes",pop:171483,emoji:"⚽",rarity:"rare"},
+  {name:"Le Havre",region:"Normandie",pop:170147,emoji:"🚢",rarity:"rare"},
+  {name:"Toulon",region:"Provence-Alpes-Côte d'Azur",pop:167985,emoji:"⚓",rarity:"rare"},
+  {name:"Grenoble",region:"Auvergne-Rhône-Alpes",pop:158454,emoji:"🏔️",rarity:"rare"},
+  {name:"Dijon",region:"Bourgogne-Franche-Comté",pop:155090,emoji:"🍯",rarity:"rare"},
+  {name:"Angers",region:"Pays de la Loire",pop:154508,emoji:"🏰",rarity:"rare"},
+  {name:"Nîmes",region:"Occitanie",pop:151258,emoji:"🏛️",rarity:"rare"},
+  // COMMON (50k-150k)
+  {name:"Villeurbanne",region:"Auvergne-Rhône-Alpes",pop:149019,emoji:"🏙️",rarity:"common"},
+  {name:"Clermont-Ferrand",region:"Auvergne-Rhône-Alpes",pop:147865,emoji:"🌋",rarity:"common"},
+  {name:"Le Mans",region:"Pays de la Loire",pop:143599,emoji:"🏎️",rarity:"common"},
+  {name:"Aix-en-Provence",region:"Provence-Alpes-Côte d'Azur",pop:143097,emoji:"🎨",rarity:"common"},
+  {name:"Brest",region:"Bretagne",pop:141103,emoji:"⛵",rarity:"common"},
+  {name:"Tours",region:"Centre-Val de Loire",pop:136562,emoji:"🏰",rarity:"common"},
+  {name:"Amiens",region:"Hauts-de-France",pop:134057,emoji:"⛪",rarity:"common"},
+  {name:"Limoges",region:"Nouvelle-Aquitaine",pop:132175,emoji:"🏺",rarity:"common"},
+  {name:"Metz",region:"Grand Est",pop:117619,emoji:"🎭",rarity:"common"},
+  {name:"Besançon",region:"Bourgogne-Franche-Comté",pop:116952,emoji:"⌚",rarity:"common"},
+  {name:"Perpignan",region:"Occitanie",pop:121875,emoji:"🐂",rarity:"common"},
+  {name:"Boulogne-Billancourt",region:"Île-de-France",pop:120071,emoji:"🚗",rarity:"common"},
+  {name:"Orléans",region:"Centre-Val de Loire",pop:114644,emoji:"⚔️",rarity:"common"},
+  {name:"Rouen",region:"Normandie",pop:112321,emoji:"🔥",rarity:"common"},
+  {name:"Mulhouse",region:"Grand Est",pop:111430,emoji:"🚂",rarity:"common"},
+  {name:"Caen",region:"Normandie",pop:106277,emoji:"🏖️",rarity:"common"},
+  {name:"Avignon",region:"Provence-Alpes-Côte d'Azur",pop:93124,emoji:"🎭",rarity:"common"},
+  {name:"Poitiers",region:"Nouvelle-Aquitaine",pop:87959,emoji:"⚜️",rarity:"common"},
+  {name:"Pau",region:"Nouvelle-Aquitaine",pop:77386,emoji:"🏔️",rarity:"common"},
+  {name:"Dunkerque",region:"Hauts-de-France",pop:90000,emoji:"⛵",rarity:"common"},
+  {name:"Versailles",region:"Île-de-France",pop:85801,emoji:"👑",rarity:"common"},
+  {name:"Argenteuil",region:"Île-de-France",pop:110000,emoji:"🎨",rarity:"common"},
+  {name:"Montreuil",region:"Île-de-France",pop:109000,emoji:"🌳",rarity:"common"},
+  {name:"Nancy",region:"Grand Est",pop:104885,emoji:"🌺",rarity:"common"},
+  {name:"La Rochelle",region:"Nouvelle-Aquitaine",pop:77811,emoji:"🏰",rarity:"common"},
+  {name:"Antibes",region:"Provence-Alpes-Côte d'Azur",pop:73798,emoji:"⛵",rarity:"common"},
+  {name:"Vitry-sur-Seine",region:"Île-de-France",pop:94162,emoji:"🏭",rarity:"common"},
+  {name:"Colombes",region:"Île-de-France",pop:86000,emoji:"🏅",rarity:"common"},
+  {name:"Aulnay-sous-Bois",region:"Île-de-France",pop:83438,emoji:"🏙️",rarity:"common"},
+  {name:"Saint-Denis",region:"Île-de-France",pop:110282,emoji:"⚽",rarity:"common"},
+  {name:"Rueil-Malmaison",region:"Île-de-France",pop:84490,emoji:"🏡",rarity:"common"},
+  {name:"Champigny-sur-Marne",region:"Île-de-France",pop:77000,emoji:"🌊",rarity:"common"},
+  {name:"Calais",region:"Hauts-de-France",pop:72646,emoji:"⛴️",rarity:"common"},
+  {name:"Mérignac",region:"Nouvelle-Aquitaine",pop:68720,emoji:"✈️",rarity:"common"},
+  {name:"Roubaix",region:"Hauts-de-France",pop:95238,emoji:"🧶",rarity:"common"},
+  {name:"Tourcoing",region:"Hauts-de-France",pop:95948,emoji:"🏭",rarity:"common"},
+  {name:"Fort-de-France",region:"Martinique",pop:79423,emoji:"🌴",rarity:"common"},
+  {name:"Saint-Paul",region:"La Réunion",pop:108000,emoji:"🌋",rarity:"common"},
+  {name:"Nanterre",region:"Île-de-France",pop:93190,emoji:"🏗️",rarity:"common"},
+  {name:"Créteil",region:"Île-de-France",pop:91700,emoji:"🏙️",rarity:"common"},
+  {name:"Courbevoie",region:"Île-de-France",pop:86000,emoji:"🏙️",rarity:"common"},
+];
+
+// Probabilités de rareté
+const RARITY_WEIGHTS = { common: 65, rare: 25, epic: 8, legendary: 2 };
+const RARITY_LABELS  = { common:"Commun", rare:"Rare", epic:"Épique", legendary:"Légendaire" };
+const RARITY_STARS   = { common:"⚪", rare:"🔵", epic:"🟡", legendary:"🟣" };
+
+// Storage
+const GACHA_KEY = `${STORAGE_KEY}-gacha`;
+function loadGachaState() {
+  try { return JSON.parse(localStorage.getItem(GACHA_KEY) || "null") || { draws:0, lastDaily:null, kmAtLastDraw:0, collection:[] }; } catch { return { draws:0, lastDaily:null, kmAtLastDraw:0, collection:[] }; }
+}
+function saveGachaState(state) {
+  try { localStorage.setItem(GACHA_KEY, JSON.stringify(state)); } catch {}
+}
+
+const MAX_DRAWS = 5;
+const KM_PER_DRAW = 5;
+
+// Calcule combien de tirages sont disponibles
+function computeDraws(state) {
+  let draws = state.draws;
+  // Tirage quotidien
+  const today = new Date().toDateString();
+  if (state.lastDaily !== today) {
+    draws = Math.min(MAX_DRAWS, draws + 1);
+  }
+  // Tirages marche
+  const kmGained = totalDist - (state.kmAtLastDraw || 0);
+  const walkDraws = Math.floor(kmGained / KM_PER_DRAW);
+  draws = Math.min(MAX_DRAWS, draws + walkDraws);
+  return draws;
+}
+
+// Met à jour les tirages (appelé au démarrage et à chaque km)
+function refreshGachaDraws() {
+  const state = loadGachaState();
+  const today = new Date().toDateString();
+
+  let changed = false;
+  // Quotidien
+  if (state.lastDaily !== today) {
+    state.draws = Math.min(MAX_DRAWS, state.draws + 1);
+    state.lastDaily = today;
+    changed = true;
+  }
+  // Marche
+  const kmGained = totalDist - (state.kmAtLastDraw || 0);
+  const walkDraws = Math.floor(kmGained / KM_PER_DRAW);
+  if (walkDraws > 0) {
+    state.draws = Math.min(MAX_DRAWS, state.draws + walkDraws);
+    state.kmAtLastDraw = (state.kmAtLastDraw || 0) + walkDraws * KM_PER_DRAW;
+    changed = true;
+  }
+
+  if (changed) saveGachaState(state);
+  updateGachaChip(state.draws);
+  return state;
+}
+
+function updateGachaChip(draws) {
+  document.getElementById("stat-draws").textContent = draws;
+  const dot = document.getElementById("gacha-dot");
+  dot.style.display = draws > 0 ? "block" : "none";
+}
+
+// Tirage aléatoire selon poids
+function rollRarity() {
+  const total = Object.values(RARITY_WEIGHTS).reduce((a,b) => a+b, 0);
+  let r = Math.random() * total;
+  for (const [rarity, w] of Object.entries(RARITY_WEIGHTS)) {
+    r -= w;
+    if (r <= 0) return rarity;
+  }
+  return "common";
+}
+
+function drawCity(rarity) {
+  const pool = GACHA_CITIES.filter(c => c.rarity === rarity);
+  return pool[Math.floor(Math.random() * pool.length)];
+}
+
+function buildCard(city, large = true) {
+  const size = large ? "gacha-card" : "gacha-mini";
+  const popStr = city.pop >= 1000000
+    ? (city.pop / 1000000).toFixed(1) + "M hab."
+    : Math.round(city.pop / 1000) + "k hab.";
+
+  if (!large) {
+    return `<div class="${size} ${city.rarity}" title="${city.name} · ${city.region}">
+      <span class="gacha-mini-emoji">${city.emoji}</span>
+      <div class="gacha-mini-name">${city.name}</div>
+    </div>`;
+  }
+
+  return `<div class="gacha-card ${city.rarity}">
+    <span class="gacha-card-badge">${RARITY_STARS[city.rarity]} ${RARITY_LABELS[city.rarity]}</span>
+    <div class="gacha-card-rarity">${RARITY_LABELS[city.rarity]}</div>
+    <span class="gacha-card-emoji">${city.emoji}</span>
+    <div class="gacha-card-name">${city.name}</div>
+    <div class="gacha-card-region">${city.region}</div>
+    <div style="border-top:1px solid rgba(0,0,0,0.08);margin-top:10px;padding-top:8px;">
+      <div class="gacha-card-stat"><span>Population</span><span>${popStr}</span></div>
+    </div>
+  </div>`;
+}
+
+// Construit les tokens (points bleus)
+function renderTokens(draws) {
+  const el = document.getElementById("gacha-tokens");
+  el.innerHTML = Array.from({length: MAX_DRAWS}, (_, i) =>
+    `<div class="gacha-token${i < draws ? "" : " empty"}"></div>`
+  ).join("");
+}
+
+// Info prochain tirage
+function renderNextInfo(state) {
+  const el = document.getElementById("gacha-next-info");
+  const today = new Date().toDateString();
+  const hasDaily = state.lastDaily !== today;
+  const kmLeft = KM_PER_DRAW - ((totalDist - (state.kmAtLastDraw||0)) % KM_PER_DRAW);
+  const parts = [];
+  if (hasDaily) parts.push("🌅 Tirage quotidien disponible !");
+  else parts.push(`🌅 Prochain quotidien demain`);
+  parts.push(`🚶 +1 tirage dans ${kmLeft.toFixed(1)} km`);
+  el.innerHTML = parts.join("<br>");
+}
+
+// Render collection
+function renderGachaCollection() {
+  const state = loadGachaState();
+  const el = document.getElementById("gacha-collection");
+  if (!state.collection || state.collection.length === 0) {
+    el.style.display = "block";
+    el.style.gridTemplateColumns = "1fr";
+    el.innerHTML = `<div style="text-align:center;padding:24px;color:#94a3b8;font-family:'Space Mono',monospace;font-size:0.68rem;">Aucune carte encore.<br>Faites votre premier tirage !</div>`;
+    return;
+  }
+  el.style.display = "grid";
+  el.style.gridTemplateColumns = "repeat(3,1fr)";
+  // Sort: legendary > epic > rare > common, then by name
+  const order = {legendary:0,epic:1,rare:2,common:3};
+  const sorted = [...state.collection].sort((a,b) => order[a.rarity]-order[b.rarity] || a.name.localeCompare(b.name));
+  el.innerHTML = sorted.map(city => {
+    const mini = buildCard(city, false);
+    return `<div onclick="showCardDetail(${JSON.stringify(city).replace(/"/g,'&quot;')})">${mini}</div>`;
+  }).join("");
+}
+
+function showCardDetail(city) {
+  const overlay = document.getElementById("gacha-overlay");
+  overlay.style.display = "flex";
+  document.getElementById("gacha-overlay-card").innerHTML = buildCard(city, true);
+  overlay.onclick = (e) => { if (e.target === overlay) overlay.style.display = "none"; };
+}
+
+// Open gacha panel
+function openGachaPanel() {
+  const state = refreshGachaDraws();
+  renderTokens(state.draws);
+  renderNextInfo(state);
+  document.getElementById("gacha-draw-btn").disabled = state.draws <= 0;
+  document.getElementById("gacha-draw-btn").style.opacity = state.draws > 0 ? "1" : "0.5";
+  document.getElementById("gacha-reveal").style.display = "none";
+  renderGachaCollection();
+  document.getElementById("gacha-panel").style.display = "flex";
+}
+
+// DRAW
+document.getElementById("gacha-chip").addEventListener("click", openGachaPanel);
+document.getElementById("gacha-close").addEventListener("click", () => {
+  document.getElementById("gacha-panel").style.display = "none";
+});
+
+document.getElementById("gacha-draw-btn").addEventListener("click", () => {
+  const state = loadGachaState();
+  if (state.draws <= 0) return;
+
+  // Consume draw
+  state.draws--;
+  saveGachaState(state);
+
+  // Roll
+  const rarity = rollRarity();
+  const city = drawCity(rarity);
+
+  // Add to collection (allow duplicates — comme un vrai gacha)
+  state.collection = state.collection || [];
+  state.collection.push(city);
+  saveGachaState(state);
+
+  // Show overlay reveal
+  const overlay = document.getElementById("gacha-overlay");
+  overlay.style.display = "flex";
+  document.getElementById("gacha-overlay-card").innerHTML = buildCard(city, true);
+  overlay.onclick = (e) => {
+    if (e.target === overlay) {
+      overlay.style.display = "none";
+      // Refresh panel
+      const s2 = refreshGachaDraws();
+      renderTokens(s2.draws);
+      renderNextInfo(s2);
+      document.getElementById("gacha-draw-btn").disabled = s2.draws <= 0;
+      document.getElementById("gacha-draw-btn").style.opacity = s2.draws > 0 ? "1" : "0.5";
+      renderGachaCollection();
+    }
+  };
+
+  updateGachaChip(state.draws);
+  showToast(RARITY_STARS[rarity], `${city.name} — ${RARITY_LABELS[rarity]} !`);
+});
+
+document.getElementById("gacha-reveal-close").addEventListener("click", () => {
+  document.getElementById("gacha-overlay").style.display = "none";
+  const s2 = refreshGachaDraws();
+  renderTokens(s2.draws);
+  renderNextInfo(s2);
+  document.getElementById("gacha-draw-btn").disabled = s2.draws <= 0;
+  document.getElementById("gacha-draw-btn").style.opacity = s2.draws > 0 ? "1" : "0.5";
+  renderGachaCollection();
+});
+
+// Bonus card quand on complète 100% d'une ville
+function grantCityCompletionCard(cityName) {
+  const match = GACHA_CITIES.find(c => c.name.toLowerCase() === cityName.toLowerCase());
+  if (!match) return;
+  const state = loadGachaState();
+  state.collection = state.collection || [];
+  // Ajouter avec marqueur special
+  const specialCard = { ...match, rarity:"legendary", special:true };
+  state.collection.push(specialCard);
+  saveGachaState(state);
+  // Reveal
+  const overlay = document.getElementById("gacha-overlay");
+  overlay.style.display = "flex";
+  const cardHtml = buildCard(specialCard, true);
+  document.getElementById("gacha-overlay-card").innerHTML =
+    `<div style="text-align:center;margin-bottom:12px;font-family:'Space Mono',monospace;font-size:0.7rem;color:#fff;">✨ Ville complétée à 100% !</div>` + cardHtml;
+  overlay.onclick = (e) => { if (e.target === overlay) overlay.style.display = "none"; };
+  showToast("✨", `Carte spéciale ${cityName} débloquée !`);
+}
+
+// Init gacha au démarrage
+refreshGachaDraws();
+
 // ── SERVICE WORKER ────────────────────────────────────────────────────
 if ("serviceWorker" in navigator) {
   window.addEventListener("load", () => {
@@ -1390,5 +1762,36 @@ if ("serviceWorker" in navigator) {
   });
 }
 </script>
+
+<!-- ── GACHA PANEL ─────────────────────────────────────────────── -->
+<div id="gacha-panel" style="position:absolute;inset:0;z-index:1100;background:rgba(248,250,252,0.98);display:none;flex-direction:column;overflow:hidden;backdrop-filter:blur(12px);">
+  <div style="display:flex;align-items:center;justify-content:space-between;padding:16px;border-bottom:1px solid rgba(0,0,0,0.07);">
+    <h2 style="font-family:'Syne',sans-serif;font-weight:800;font-size:1.1rem;color:#1e293b;">✨ Tirages</h2>
+    <button id="gacha-close" style="background:none;border:none;font-size:1.2rem;cursor:pointer;color:#64748b;">✕</button>
+  </div>
+  <!-- Tirages disponibles + bouton tirer -->
+  <div id="gacha-draw-section" style="padding:20px 16px;border-bottom:1px solid rgba(0,0,0,0.07);display:flex;flex-direction:column;align-items:center;gap:14px;">
+    <div style="display:flex;gap:6px;" id="gacha-tokens"></div>
+    <button id="gacha-draw-btn" style="padding:14px 36px;border-radius:30px;background:#2563eb;color:#fff;border:none;font-family:'Space Mono',monospace;font-size:0.85rem;letter-spacing:0.06em;cursor:pointer;box-shadow:0 4px 20px rgba(37,99,235,0.35);">
+      Tirer une carte 🎴
+    </button>
+    <div id="gacha-next-info" style="font-family:'Space Mono',monospace;font-size:0.6rem;color:#94a3b8;text-align:center;"></div>
+  </div>
+  <!-- Reveal zone -->
+  <div id="gacha-reveal" style="display:none;flex-direction:column;align-items:center;justify-content:center;padding:24px 16px;gap:16px;">
+    <div id="gacha-card-reveal"></div>
+    <button id="gacha-reveal-close" style="padding:10px 28px;border-radius:20px;border:1.5px solid rgba(37,99,235,0.3);background:#fff;color:#2563eb;font-family:'Space Mono',monospace;font-size:0.72rem;cursor:pointer;">
+      Ajouter à la collection →
+    </button>
+  </div>
+  <!-- Collection -->
+  <div style="padding:12px 16px 6px;font-family:'Space Mono',monospace;font-size:0.62rem;color:#64748b;letter-spacing:0.1em;text-transform:uppercase;">Ma collection</div>
+  <div id="gacha-collection" style="flex:1;overflow-y:auto;padding:0 12px 16px;display:grid;grid-template-columns:repeat(3,1fr);gap:8px;"></div>
+</div>
+
+<!-- ── GACHA CARD REVEAL OVERLAY ──────────────────────────────── -->
+<div id="gacha-overlay" style="position:absolute;inset:0;z-index:1200;background:rgba(0,0,0,0.75);display:none;align-items:center;justify-content:center;backdrop-filter:blur(4px);">
+  <div id="gacha-overlay-card" style="animation:card-flip 0.6s ease;"></div>
+</div>
 </body>
 </html>
