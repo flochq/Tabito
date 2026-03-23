@@ -651,10 +651,37 @@ function checkPOIs(lng, lat) {
   if (!foundNearby && nearbyPOI) hideCameraBtn();
 }
 
-// Photo storage
-// Photo storage
+// Photo storage — compression canvas synchrone avant sauvegarde
+function compressDataUrl(dataUrl, maxWidth = 1024, quality = 0.7) {
+  try {
+    const img = new Image();
+    img.src = dataUrl;
+    if (!img.width) return dataUrl; // image pas encore décodée, retour brut
+    const canvas = document.createElement("canvas");
+    const ratio = Math.min(1, maxWidth / img.width);
+    canvas.width = Math.round(img.width * ratio);
+    canvas.height = Math.round(img.height * ratio);
+    canvas.getContext("2d").drawImage(img, 0, 0, canvas.width, canvas.height);
+    return canvas.toDataURL("image/jpeg", quality);
+  } catch { return dataUrl; }
+}
 function savePhoto(poiId, dataUrl) {
-  try { localStorage.setItem(`${STORAGE_KEY}-photo-${poiId}`, dataUrl); } catch {}
+  const compressed = compressDataUrl(dataUrl);
+  try {
+    localStorage.setItem(`${STORAGE_KEY}-photo-${poiId}`, compressed);
+    return compressed;
+  } catch {
+    // Quota dépassé — essai avec compression plus forte
+    try {
+      const tiny = compressDataUrl(dataUrl, 600, 0.5);
+      localStorage.setItem(`${STORAGE_KEY}-photo-${poiId}`, tiny);
+      showToast("⚠️", "Photo compressée (espace limité)");
+      return tiny;
+    } catch {
+      showToast("❌", "Stockage plein, photo non sauvegardée");
+      return null;
+    }
+  }
 }
 function loadPhoto(poiId) {
   try { return localStorage.getItem(`${STORAGE_KEY}-photo-${poiId}`); } catch { return null; }
@@ -781,10 +808,11 @@ cameraInput.addEventListener("change", async (e) => {
     const id = `free-${Date.now()}`;
     const reader = new FileReader();
     reader.onload = (ev) => {
-      savePhoto(id, ev.target.result);
-      const fp = { id, name:"Photo libre", icon:"📸", lat:lastPos?.lat, lng:lastPos?.lng, desc:"", src:ev.target.result };
+      const compressed = savePhoto(id, ev.target.result);
+      if (!compressed) { cameraInput.value = ""; return; } // stockage plein
+      const fp = { id, name:"Photo libre", icon:"📸", lat:lastPos?.lat, lng:lastPos?.lng, desc:"", src:compressed };
       freePhotos.push(fp);
-      // Stocker SANS le src (trop lourd) — relu depuis photo-{id} au démarrage
+      // Stocker SANS le src — relu depuis photo-{id} au démarrage
       const toSave = freePhotos.map(({ src: _s, ...meta }) => meta);
       try { localStorage.setItem(`${STORAGE_KEY}-freephotos`, JSON.stringify(toSave)); } catch {}
       updateStats();
@@ -797,7 +825,8 @@ cameraInput.addEventListener("change", async (e) => {
   const reader = new FileReader();
   reader.onload = (ev) => {
     const dataUrl = ev.target.result;
-    savePhoto(nearbyPOI.id, dataUrl);
+    const savedPoi = savePhoto(nearbyPOI.id, dataUrl);
+    if (!savedPoi) { cameraInput.value = ""; return; }
     // Mark as discovered
     if (!discovered.has(nearbyPOI.id)) {
       discovered.add(nearbyPOI.id);
