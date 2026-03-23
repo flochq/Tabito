@@ -369,6 +369,7 @@
 
 <div id="map"></div>
 <div id="logo"><h1>Tabito</h1><p>explorez l'inconnu</p></div>
+
 <div id="gps-dot"></div>
 <div id="stats">
   <div class="stat-chip"><span class="stat-val" id="stat-photos">0</span><span class="stat-lbl">photos</span></div>
@@ -477,6 +478,38 @@
     </div>
   </div>
 </div>
+
+<!-- ── GACHA PANEL ─────────────────────────────────────────────── -->
+<div id="gacha-panel" style="position:absolute;inset:0;z-index:1150;background:rgba(248,250,252,0.98);display:none;flex-direction:column;backdrop-filter:blur(12px);">
+  <div style="display:flex;align-items:center;justify-content:space-between;padding:16px;border-bottom:1px solid rgba(0,0,0,0.07);">
+    <h2 style="font-family:'Syne',sans-serif;font-weight:800;font-size:1.1rem;color:#1e293b;">✨ Tirages</h2>
+    <button id="gacha-close" onclick="document.getElementById('gacha-panel').style.display='none'" style="background:none;border:none;font-size:1.2rem;cursor:pointer;color:#64748b;touch-action:manipulation;">✕</button>
+  </div>
+  <!-- Tirages disponibles + bouton tirer -->
+  <div id="gacha-draw-section" style="padding:20px 16px;border-bottom:1px solid rgba(0,0,0,0.07);display:flex;flex-direction:column;align-items:center;gap:14px;">
+    <div style="display:flex;gap:6px;" id="gacha-tokens"></div>
+    <button id="gacha-draw-btn" onclick="gachaDraw()" style="padding:14px 36px;border-radius:30px;background:#2563eb;color:#fff;border:none;font-family:'Space Mono',monospace;font-size:0.85rem;letter-spacing:0.06em;cursor:pointer;box-shadow:0 4px 20px rgba(37,99,235,0.35);touch-action:manipulation;">
+      Tirer une carte 🎴
+    </button>
+    <div id="gacha-next-info" style="font-family:'Space Mono',monospace;font-size:0.6rem;color:#94a3b8;text-align:center;"></div>
+  </div>
+  <!-- Reveal zone -->
+  <div id="gacha-reveal" style="display:none;flex-direction:column;align-items:center;justify-content:center;padding:24px 16px;gap:16px;">
+    <div id="gacha-card-reveal"></div>
+    <button id="gacha-reveal-close" style="padding:10px 28px;border-radius:20px;border:1.5px solid rgba(37,99,235,0.3);background:#fff;color:#2563eb;font-family:'Space Mono',monospace;font-size:0.72rem;cursor:pointer;">
+      Ajouter à la collection →
+    </button>
+  </div>
+  <!-- Collection -->
+  <div style="padding:12px 16px 6px;font-family:'Space Mono',monospace;font-size:0.62rem;color:#64748b;letter-spacing:0.1em;text-transform:uppercase;">Ma collection</div>
+  <div id="gacha-collection" style="flex:1;overflow-y:auto;padding:0 12px 16px;display:grid;grid-template-columns:repeat(3,1fr);gap:8px;"></div>
+</div>
+
+<!-- ── GACHA CARD REVEAL OVERLAY ──────────────────────────────── -->
+<div id="gacha-overlay" style="position:fixed;inset:0;z-index:1250;background:rgba(0,0,0,0.75);display:none;align-items:center;justify-content:center;backdrop-filter:blur(4px);">
+  <div id="gacha-overlay-card" style="animation:card-flip 0.6s ease;"></div>
+</div>
+
 
 <script>
 const STORAGE_KEY  = "tabito-v2";
@@ -1682,7 +1715,7 @@ document.getElementById("gacha-close").addEventListener("click", () => {
   document.getElementById("gacha-panel").style.display = "none";
 });
 
-document.getElementById("gacha-draw-btn").addEventListener("click", () => {
+function gachaDraw() {
   const state = loadGachaState();
   if (state.draws <= 0) return;
 
@@ -1718,7 +1751,9 @@ document.getElementById("gacha-draw-btn").addEventListener("click", () => {
 
   updateGachaChip(state.draws);
   showToast(RARITY_STARS[rarity], `${city.name} — ${RARITY_LABELS[rarity]} !`);
-});
+}
+// Also keep addEventListener for non-iOS
+document.getElementById("gacha-draw-btn").addEventListener("click", gachaDraw);
 
 document.getElementById("gacha-reveal-close").addEventListener("click", () => {
   document.getElementById("gacha-overlay").style.display = "none";
@@ -1763,35 +1798,5 @@ if ("serviceWorker" in navigator) {
 }
 </script>
 
-<!-- ── GACHA PANEL ─────────────────────────────────────────────── -->
-<div id="gacha-panel" style="position:absolute;inset:0;z-index:1100;background:rgba(248,250,252,0.98);display:none;flex-direction:column;overflow:hidden;backdrop-filter:blur(12px);">
-  <div style="display:flex;align-items:center;justify-content:space-between;padding:16px;border-bottom:1px solid rgba(0,0,0,0.07);">
-    <h2 style="font-family:'Syne',sans-serif;font-weight:800;font-size:1.1rem;color:#1e293b;">✨ Tirages</h2>
-    <button id="gacha-close" style="background:none;border:none;font-size:1.2rem;cursor:pointer;color:#64748b;">✕</button>
-  </div>
-  <!-- Tirages disponibles + bouton tirer -->
-  <div id="gacha-draw-section" style="padding:20px 16px;border-bottom:1px solid rgba(0,0,0,0.07);display:flex;flex-direction:column;align-items:center;gap:14px;">
-    <div style="display:flex;gap:6px;" id="gacha-tokens"></div>
-    <button id="gacha-draw-btn" style="padding:14px 36px;border-radius:30px;background:#2563eb;color:#fff;border:none;font-family:'Space Mono',monospace;font-size:0.85rem;letter-spacing:0.06em;cursor:pointer;box-shadow:0 4px 20px rgba(37,99,235,0.35);">
-      Tirer une carte 🎴
-    </button>
-    <div id="gacha-next-info" style="font-family:'Space Mono',monospace;font-size:0.6rem;color:#94a3b8;text-align:center;"></div>
-  </div>
-  <!-- Reveal zone -->
-  <div id="gacha-reveal" style="display:none;flex-direction:column;align-items:center;justify-content:center;padding:24px 16px;gap:16px;">
-    <div id="gacha-card-reveal"></div>
-    <button id="gacha-reveal-close" style="padding:10px 28px;border-radius:20px;border:1.5px solid rgba(37,99,235,0.3);background:#fff;color:#2563eb;font-family:'Space Mono',monospace;font-size:0.72rem;cursor:pointer;">
-      Ajouter à la collection →
-    </button>
-  </div>
-  <!-- Collection -->
-  <div style="padding:12px 16px 6px;font-family:'Space Mono',monospace;font-size:0.62rem;color:#64748b;letter-spacing:0.1em;text-transform:uppercase;">Ma collection</div>
-  <div id="gacha-collection" style="flex:1;overflow-y:auto;padding:0 12px 16px;display:grid;grid-template-columns:repeat(3,1fr);gap:8px;"></div>
-</div>
-
-<!-- ── GACHA CARD REVEAL OVERLAY ──────────────────────────────── -->
-<div id="gacha-overlay" style="position:absolute;inset:0;z-index:1200;background:rgba(0,0,0,0.75);display:none;align-items:center;justify-content:center;backdrop-filter:blur(4px);">
-  <div id="gacha-overlay-card" style="animation:card-flip 0.6s ease;"></div>
-</div>
 </body>
 </html>
