@@ -652,6 +652,7 @@ function checkPOIs(lng, lat) {
 }
 
 // Photo storage
+// Photo storage
 function savePhoto(poiId, dataUrl) {
   try { localStorage.setItem(`${STORAGE_KEY}-photo-${poiId}`, dataUrl); } catch {}
 }
@@ -724,7 +725,7 @@ async function fetchCityBoundary(lng, lat) {
     document.getElementById("city-name").textContent = cityName;
 
     // Persist this city in the visited-cities registry
-    saveCityRecord(cityName, polygon, cityArea);
+    saveCityRecord(cityName, cityArea);
 
     updateStats();
     return polygon;
@@ -773,7 +774,7 @@ document.getElementById("camera-trigger").addEventListener("click", () => {
   cameraInput.click();
 });
 
-cameraInput.addEventListener("change", (e) => {
+cameraInput.addEventListener("change", async (e) => {
   const file = e.target.files[0];
   if (!file) return;
   if (!nearbyPOI) {
@@ -783,7 +784,9 @@ cameraInput.addEventListener("change", (e) => {
       savePhoto(id, ev.target.result);
       const fp = { id, name:"Photo libre", icon:"📸", lat:lastPos?.lat, lng:lastPos?.lng, desc:"", src:ev.target.result };
       freePhotos.push(fp);
-      try { localStorage.setItem(`${STORAGE_KEY}-freephotos`, JSON.stringify(freePhotos)); } catch {}
+      // Stocker SANS le src (trop lourd) — relu depuis photo-{id} au démarrage
+      const toSave = freePhotos.map(({ src: _s, ...meta }) => meta);
+      try { localStorage.setItem(`${STORAGE_KEY}-freephotos`, JSON.stringify(toSave)); } catch {}
       updateStats();
       showToast("📸", "Photo sauvegardée !");
     };
@@ -844,22 +847,20 @@ updateStats();
 function loadCitiesRegistry() {
   try { return JSON.parse(localStorage.getItem(`${STORAGE_KEY}-cities`) || "{}"); } catch { return {}; }
 }
-function saveCityRecord(name, polygon, area) {
+function saveCityRecord(name, area) {
   const registry = loadCitiesRegistry();
-  // Use name as key (slugified)
   const key = name.toLowerCase().replace(/\s+/g, "-");
-  if (!registry[key]) registry[key] = { name, area, polygon };
-  // Always update polygon (it might have been saved without one before)
-  registry[key].polygon = polygon;
-  registry[key].area = area;
+  // Stocker seulement name + area (polygon trop lourd pour localStorage)
+  registry[key] = { name, area };
   try { localStorage.setItem(`${STORAGE_KEY}-cities`, JSON.stringify(registry)); } catch {}
 }
-function computeCityExplored(polygon, area) {
-  if (!exploredBands[0] || !polygon || !area) return 0;
+function computeCityExplored(cityName, area) {
+  if (!exploredBands[0] || !area) return 0;
+  const currentName = document.getElementById("city-name").textContent;
+  const polyToUse = (cityName === currentName && cityBoundary) ? cityBoundary : null;
+  if (!polyToUse) return 0;
   try {
-    // Rehydrate from plain JSON if needed (localStorage returns plain objects)
-    const poly = polygon.type === "Feature" ? polygon : turf.feature(polygon);
-    const intersection = turf.intersect(exploredBands[0], poly);
+    const intersection = turf.intersect(exploredBands[0], polyToUse);
     if (!intersection) return 0;
     return Math.min(100, (turf.area(intersection) / 1e6 / area) * 100);
   } catch { return 0; }
@@ -878,7 +879,7 @@ function openCitiesPanel() {
   } else {
     const cities = keys.map(key => {
       const city = registry[key];
-      const pct = computeCityExplored(city.polygon, city.area);
+      const pct = computeCityExplored(city.name, city.area);
       return { ...city, pct };
     }).sort((a, b) => b.pct - a.pct);
 
@@ -1251,7 +1252,8 @@ function showCollectionPicker(poi) {
     const fp = freePhotos.find(p => p.id === poi.id);
     if (fp) {
       fp.name = newName;
-      try { localStorage.setItem(`${STORAGE_KEY}-freephotos`, JSON.stringify(freePhotos)); } catch {}
+      const toSave1 = freePhotos.map(({ src: _s, ...meta }) => meta);
+      try { localStorage.setItem(`${STORAGE_KEY}-freephotos`, JSON.stringify(toSave1)); } catch {}
     }
     savePhotoCollection(poi.id, newCol);
     document.body.removeChild(modal);
@@ -1265,7 +1267,8 @@ function showCollectionPicker(poi) {
     const fpIdx = freePhotos.findIndex(p => p.id === poi.id);
     if (fpIdx !== -1) {
       freePhotos.splice(fpIdx, 1);
-      try { localStorage.setItem(`${STORAGE_KEY}-freephotos`, JSON.stringify(freePhotos)); } catch {}
+      const toSave2 = freePhotos.map(({ src: _s, ...meta }) => meta);
+      try { localStorage.setItem(`${STORAGE_KEY}-freephotos`, JSON.stringify(toSave2)); } catch {}
     }
     if (discovered.has(poi.id)) {
       discovered.delete(poi.id);
