@@ -1557,8 +1557,8 @@ function saveGachaState(state) {
   try { localStorage.setItem(GACHA_KEY, JSON.stringify(state)); } catch {}
 }
 
-const MAX_DRAWS = 5;
-const KM_PER_DRAW = 5;
+const MAX_DRAWS = 10;
+const KM_PER_DRAW = 0,01;
 
 // Calcule combien de tirages sont disponibles
 function computeDraws(state) {
