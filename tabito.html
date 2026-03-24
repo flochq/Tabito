@@ -327,8 +327,8 @@
     100% { background-position:  200% center; }
   }
   .gacha-card {
-    border-radius: 16px; padding: 18px 16px 14px;
-    width: 220px; position: relative; overflow: hidden;
+    border-radius: 16px; padding: 16px 16px 14px;
+    width: 230px; position: relative; overflow: hidden;
     box-shadow: 0 8px 32px rgba(0,0,0,0.18);
     font-family: 'Syne', sans-serif; cursor: pointer;
   }
@@ -507,7 +507,7 @@
 
 <!-- ── GACHA CARD REVEAL OVERLAY ──────────────────────────────── -->
 <div id="gacha-overlay" style="position:fixed;inset:0;z-index:1250;background:rgba(0,0,0,0.75);display:none;align-items:center;justify-content:center;backdrop-filter:blur(4px);">
-  <div id="gacha-overlay-card" style="animation:card-flip 0.6s ease;"></div>
+  <div id="gacha-overlay-card" style="animation:card-flip 0.6s ease;display:flex;flex-direction:column;align-items:center;gap:16px;"></div>
 </div>
 
 
@@ -1623,27 +1623,293 @@ function drawCity(rarity) {
   return pool[Math.floor(Math.random() * pool.length)];
 }
 
+
+// ── CITY VISUALS (silhouette + landmark SVG) ─────────────────────────
+const CITY_VISUALS = {
+  // name -> { silhouette: SVG path (100x60 viewBox), landmark: SVG elements }
+  "Paris": {
+    silhouette: "M10,55 L15,50 L25,48 L30,45 L40,43 L50,44 L60,42 L70,44 L75,46 L82,45 L90,48 L95,55 Z",
+    landmark: `<g transform="translate(35,8)">
+      <!-- Tour Eiffel -->
+      <polygon points="15,42 18,0 21,42" fill="currentColor" opacity="0.9" stroke="none"/>
+      <line x1="13" y1="35" x2="23" y2="35" stroke="currentColor" stroke-width="1.5" opacity="0.8"/>
+      <line x1="11" y1="42" x2="25" y2="42" stroke="currentColor" stroke-width="2" opacity="0.9"/>
+      <rect x="17" y="-2" width="2" height="4" fill="currentColor" opacity="0.9"/>
+    </g>`
+  },
+  "Marseille": {
+    silhouette: "M8,55 L12,48 L18,45 L28,44 L35,46 L42,43 L50,44 L58,43 L65,45 L72,44 L80,46 L88,50 L93,55 Z",
+    landmark: `<g transform="translate(28,6)">
+      <!-- Notre-Dame de la Garde -->
+      <rect x="14" y="28" width="16" height="16" fill="currentColor" opacity="0.85" rx="1"/>
+      <polygon points="14,28 22,10 30,28" fill="currentColor" opacity="0.9"/>
+      <rect x="20" y="4" width="4" height="8" fill="currentColor" opacity="0.95"/>
+      <circle cx="22" cy="2" r="2.5" fill="currentColor" opacity="0.95"/>
+    </g>`
+  },
+  "Lyon": {
+    silhouette: "M12,55 L16,50 L22,47 L30,45 L40,44 L50,46 L58,44 L66,45 L74,47 L82,50 L88,55 Z",
+    landmark: `<g transform="translate(25,5)">
+      <!-- Basilique de Fourvière -->
+      <rect x="10" y="22" width="30" height="20" fill="currentColor" opacity="0.8" rx="1"/>
+      <polygon points="10,22 25,8 40,22" fill="currentColor" opacity="0.85"/>
+      <rect x="14" y="18" width="5" height="5" fill="currentColor" opacity="0.9" rx="1"/>
+      <rect x="31" y="18" width="5" height="5" fill="currentColor" opacity="0.9" rx="1"/>
+      <rect x="23" y="4" width="4" height="10" fill="currentColor" opacity="0.95"/>
+    </g>`
+  },
+  "Toulouse": {
+    silhouette: "M10,55 L14,49 L20,46 L30,44 L42,45 L52,44 L62,45 L72,46 L80,49 L88,52 L92,55 Z",
+    landmark: `<g transform="translate(22,4)">
+      <!-- Capitole -->
+      <rect x="8" y="20" width="40" height="22" fill="currentColor" opacity="0.8" rx="2"/>
+      <rect x="4" y="16" width="48" height="6" fill="currentColor" opacity="0.85" rx="1"/>
+      <rect x="16" y="26" width="8" height="16" fill="currentColor" opacity="0.7" rx="1"/>
+      <rect x="32" y="26" width="8" height="16" fill="currentColor" opacity="0.7" rx="1"/>
+      <rect x="24" y="8" width="8" height="10" fill="currentColor" opacity="0.9"/>
+      <polygon points="24,8 28,2 32,8" fill="currentColor" opacity="0.95"/>
+    </g>`
+  },
+  "Nice": {
+    silhouette: "M5,55 L10,50 L20,46 L32,44 L44,45 L54,44 L64,45 L75,47 L83,49 L90,52 L95,55 Z",
+    landmark: `<g transform="translate(20,6)">
+      <!-- Promenade + mer -->
+      <rect x="0" y="34" width="60" height="8" fill="currentColor" opacity="0.5" rx="4"/>
+      <!-- Opéra -->
+      <rect x="18" y="16" width="24" height="18" fill="currentColor" opacity="0.85" rx="2"/>
+      <rect x="14" y="12" width="32" height="6" fill="currentColor" opacity="0.8" rx="1"/>
+      <polygon points="18,12 30,2 42,12" fill="currentColor" opacity="0.9"/>
+    </g>`
+  },
+  "Nantes": {
+    silhouette: "M12,55 L16,50 L24,47 L34,45 L44,46 L54,44 L62,46 L70,47 L78,49 L86,52 L90,55 Z",
+    landmark: `<g transform="translate(18,4)">
+      <!-- Château des Ducs -->
+      <rect x="8" y="18" width="44" height="26" fill="currentColor" opacity="0.8" rx="1"/>
+      <rect x="6" y="14" width="6" height="12" fill="currentColor" opacity="0.9" rx="1"/>
+      <rect x="48" y="14" width="6" height="12" fill="currentColor" opacity="0.9" rx="1"/>
+      <rect x="18" y="10" width="6" height="10" fill="currentColor" opacity="0.9" rx="1"/>
+      <rect x="36" y="10" width="6" height="10" fill="currentColor" opacity="0.9" rx="1"/>
+      <!-- Merlon créneau -->
+      <rect x="6" y="12" width="4" height="3" fill="currentColor" opacity="0.9"/>
+      <rect x="12" y="12" width="4" height="3" fill="currentColor" opacity="0.9"/>
+    </g>`
+  },
+  "Strasbourg": {
+    silhouette: "M15,55 L18,50 L24,47 L32,45 L42,44 L52,45 L60,44 L68,46 L76,48 L82,51 L86,55 Z",
+    landmark: `<g transform="translate(25,2)">
+      <!-- Cathédrale de Strasbourg -->
+      <rect x="14" y="28" width="22" height="20" fill="currentColor" opacity="0.8" rx="1"/>
+      <rect x="10" y="24" width="30" height="6" fill="currentColor" opacity="0.85" rx="1"/>
+      <rect x="18" y="8" width="14" height="18" fill="currentColor" opacity="0.85" rx="1"/>
+      <polygon points="18,8 25,0 32,8" fill="currentColor" opacity="0.95"/>
+      <rect x="14" y="30" width="6" height="18" fill="currentColor" opacity="0.6" rx="1"/>
+      <rect x="30" y="30" width="6" height="18" fill="currentColor" opacity="0.6" rx="1"/>
+    </g>`
+  },
+  "Montpellier": {
+    silhouette: "M10,55 L15,49 L22,46 L32,44 L44,45 L54,44 L64,45 L72,47 L80,50 L88,53 L92,55 Z",
+    landmark: `<g transform="translate(20,5)">
+      <!-- Arc de Triomphe Montpellier -->
+      <rect x="8" y="10" width="44" height="32" fill="none" stroke="currentColor" stroke-width="5" rx="2"/>
+      <path d="M8,10 Q30,-2 52,10" fill="none" stroke="currentColor" stroke-width="5"/>
+      <rect x="4" y="8" width="16" height="36" fill="currentColor" opacity="0.85" rx="1"/>
+      <rect x="40" y="8" width="16" height="36" fill="currentColor" opacity="0.85" rx="1"/>
+      <rect x="4" y="44" width="52" height="4" fill="currentColor" opacity="0.8"/>
+    </g>`
+  },
+  "Bordeaux": {
+    silhouette: "M8,55 L12,50 L20,47 L30,45 L42,44 L52,45 L62,44 L72,46 L80,49 L88,52 L93,55 Z",
+    landmark: `<g transform="translate(18,4)">
+      <!-- Miroir d'eau + Grand Théâtre -->
+      <rect x="0" y="38" width="64" height="8" fill="currentColor" opacity="0.35" rx="2"/>
+      <!-- Grand Théâtre -->
+      <rect x="12" y="16" width="40" height="22" fill="currentColor" opacity="0.8" rx="1"/>
+      <rect x="8" y="12" width="48" height="6" fill="currentColor" opacity="0.85" rx="1"/>
+      <rect x="16" y="6" width="6" height="8" fill="currentColor" opacity="0.9"/>
+      <rect x="42" y="6" width="6" height="8" fill="currentColor" opacity="0.9"/>
+    </g>`
+  },
+  "Lille": {
+    silhouette: "M12,55 L16,50 L22,47 L32,45 L44,45 L54,45 L64,46 L72,47 L80,50 L86,53 L90,55 Z",
+    landmark: `<g transform="translate(22,4)">
+      <!-- Beffroi de Lille -->
+      <rect x="16" y="28" width="22" height="18" fill="currentColor" opacity="0.8" rx="1"/>
+      <rect x="12" y="24" width="30" height="6" fill="currentColor" opacity="0.85"/>
+      <rect x="18" y="10" width="18" height="16" fill="currentColor" opacity="0.85" rx="1"/>
+      <rect x="22" y="3" width="10" height="9" fill="currentColor" opacity="0.9" rx="1"/>
+      <polygon points="22,3 27,0 32,3" fill="currentColor" opacity="0.95"/>
+    </g>`
+  },
+  "Rennes": {
+    silhouette: "M14,55 L18,50 L26,47 L36,45 L46,46 L56,45 L64,46 L72,48 L80,51 L86,54 L88,55 Z",
+    landmark: `<g transform="translate(20,4)">
+      <!-- Parlement de Bretagne -->
+      <rect x="8" y="18" width="44" height="24" fill="currentColor" opacity="0.8" rx="2"/>
+      <rect x="4" y="14" width="52" height="6" fill="currentColor" opacity="0.85" rx="1"/>
+      <polygon points="4,14 30,2 56,14" fill="currentColor" opacity="0.9"/>
+      <rect x="16" y="24" width="8" height="18" fill="currentColor" opacity="0.6" rx="1"/>
+      <rect x="36" y="24" width="8" height="18" fill="currentColor" opacity="0.6" rx="1"/>
+    </g>`
+  },
+  "Grenoble": {
+    silhouette: "M5,55 L10,48 L18,44 L26,42 L36,44 L46,43 L56,44 L66,42 L76,44 L84,48 L92,55 Z",
+    landmark: `<g transform="translate(10,2)">
+      <!-- Montagnes + Bastille -->
+      <polygon points="0,55 20,20 40,45 60,15 80,40 80,55" fill="currentColor" opacity="0.25"/>
+      <polygon points="50,30 60,10 70,30" fill="currentColor" opacity="0.6"/>
+      <!-- Bastille fort -->
+      <rect x="54" y="22" width="12" height="8" fill="currentColor" opacity="0.9" rx="1"/>
+      <rect x="52" y="20" width="4" height="4" fill="currentColor" opacity="0.9"/>
+      <rect x="62" y="20" width="4" height="4" fill="currentColor" opacity="0.9"/>
+    </g>`
+  },
+  "Dijon": {
+    silhouette: "M14,55 L18,50 L26,47 L36,45 L46,46 L56,45 L64,47 L72,49 L80,52 L84,55 Z",
+    landmark: `<g transform="translate(22,4)">
+      <!-- Palais des Ducs -->
+      <rect x="8" y="20" width="40" height="22" fill="currentColor" opacity="0.8" rx="1"/>
+      <rect x="4" y="15" width="8" height="30" fill="currentColor" opacity="0.9" rx="1"/>
+      <rect x="44" y="15" width="8" height="30" fill="currentColor" opacity="0.9" rx="1"/>
+      <polygon points="4,15 8,6 12,15" fill="currentColor" opacity="0.95"/>
+      <polygon points="44,15 48,6 52,15" fill="currentColor" opacity="0.95"/>
+      <rect x="12" y="16" width="32" height="5" fill="currentColor" opacity="0.85"/>
+    </g>`
+  },
+  "Avignon": {
+    silhouette: "M10,55 L14,50 L22,47 L32,45 L44,46 L54,45 L62,46 L72,48 L80,51 L88,54 L90,55 Z",
+    landmark: `<g transform="translate(16,3)">
+      <!-- Palais des Papes -->
+      <rect x="10" y="16" width="46" height="28" fill="currentColor" opacity="0.8" rx="1"/>
+      <rect x="8" y="10" width="10" height="36" fill="currentColor" opacity="0.9" rx="1"/>
+      <rect x="48" y="10" width="10" height="36" fill="currentColor" opacity="0.9" rx="1"/>
+      <rect x="22" y="8" width="8" height="10" fill="currentColor" opacity="0.9" rx="1"/>
+      <rect x="36" y="8" width="8" height="10" fill="currentColor" opacity="0.9" rx="1"/>
+      <!-- Créneaux -->
+      <rect x="8" y="8" width="4" height="4" fill="currentColor"/>
+      <rect x="14" y="8" width="4" height="4" fill="currentColor"/>
+      <rect x="48" y="8" width="4" height="4" fill="currentColor"/>
+      <rect x="54" y="8" width="4" height="4" fill="currentColor"/>
+    </g>`
+  },
+  "Versailles": {
+    silhouette: "M8,55 L14,50 L24,47 L36,45 L48,46 L58,45 L68,46 L78,48 L86,51 L92,55 Z",
+    landmark: `<g transform="translate(10,4)">
+      <!-- Château de Versailles -->
+      <rect x="4" y="22" width="72" height="20" fill="currentColor" opacity="0.8" rx="1"/>
+      <rect x="0" y="18" width="80" height="6" fill="currentColor" opacity="0.85" rx="1"/>
+      <rect x="4" y="14" width="14" height="10" fill="currentColor" opacity="0.9" rx="1"/>
+      <rect x="62" y="14" width="14" height="10" fill="currentColor" opacity="0.9" rx="1"/>
+      <polygon points="4,14 11,6 18,14" fill="currentColor" opacity="0.95"/>
+      <polygon points="62,14 69,6 76,14" fill="currentColor" opacity="0.95"/>
+      <!-- Fontaine -->
+      <circle cx="40" cy="50" r="6" fill="none" stroke="currentColor" stroke-width="2" opacity="0.5"/>
+      <line x1="40" y1="44" x2="40" y2="40" stroke="currentColor" stroke-width="1.5" opacity="0.7"/>
+    </g>`
+  },
+  "Reims": {
+    silhouette: "M12,55 L16,50 L24,47 L34,45 L44,46 L54,45 L62,47 L70,49 L78,52 L84,55 Z",
+    landmark: `<g transform="translate(18,2)">
+      <!-- Cathédrale Notre-Dame de Reims -->
+      <rect x="10" y="28" width="40" height="20" fill="currentColor" opacity="0.8" rx="1"/>
+      <rect x="6" y="22" width="48" height="8" fill="currentColor" opacity="0.85" rx="1"/>
+      <rect x="10" y="8" width="12" height="16" fill="currentColor" opacity="0.85"/>
+      <rect x="38" y="8" width="12" height="16" fill="currentColor" opacity="0.85"/>
+      <polygon points="10,8 16,0 22,8" fill="currentColor" opacity="0.95"/>
+      <polygon points="38,8 44,0 50,8" fill="currentColor" opacity="0.95"/>
+      <rect x="24" y="20" width="12" height="30" fill="currentColor" opacity="0.6" rx="1"/>
+    </g>`
+  },
+  "Caen": {
+    silhouette: "M12,55 L16,50 L24,47 L34,45 L44,46 L54,45 L62,47 L70,50 L78,53 L82,55 Z",
+    landmark: `<g transform="translate(16,4)">
+      <!-- Château de Caen -->
+      <rect x="12" y="20" width="42" height="24" fill="currentColor" opacity="0.75" rx="1"/>
+      <rect x="8" y="14" width="12" height="32" fill="currentColor" opacity="0.9" rx="1"/>
+      <rect x="46" y="14" width="12" height="32" fill="currentColor" opacity="0.9" rx="1"/>
+      <rect x="8" y="10" width="6" height="6" fill="currentColor"/>
+      <rect x="14" y="10" width="6" height="6" fill="currentColor"/>
+      <rect x="46" y="10" width="6" height="6" fill="currentColor"/>
+      <rect x="52" y="10" width="6" height="6" fill="currentColor"/>
+    </g>`
+  },
+  "Brest": {
+    silhouette: "M5,55 L8,50 L14,46 L22,44 L32,45 L42,44 L54,45 L64,46 L74,48 L84,52 L92,55 Z",
+    landmark: `<g transform="translate(16,4)">
+      <!-- Château de Brest -->
+      <rect x="12" y="20" width="40" height="22" fill="currentColor" opacity="0.8" rx="1"/>
+      <rect x="8" y="14" width="10" height="30" fill="currentColor" opacity="0.9" rx="1"/>
+      <rect x="50" y="14" width="10" height="30" fill="currentColor" opacity="0.9" rx="1"/>
+      <!-- Phare -->
+      <rect x="30" y="4" width="6" height="18" fill="currentColor" opacity="0.9" rx="1"/>
+      <polygon points="28,4 33,0 38,4" fill="currentColor" opacity="0.95"/>
+      <ellipse cx="33" cy="4" rx="5" ry="2" fill="currentColor" opacity="0.6"/>
+    </g>`
+  },
+};
+
+// Fallback visuel générique basé sur la rareté
+function getCityVisual(cityName) {
+  return CITY_VISUALS[cityName] || {
+    silhouette: "M8,55 L12,50 L20,47 L30,45 L42,45 L54,45 L64,46 L74,48 L82,51 L90,55 Z",
+    landmark: `<g transform="translate(30,8)">
+      <rect x="10" y="20" width="20" height="20" fill="currentColor" opacity="0.8" rx="1"/>
+      <polygon points="10,20 20,6 30,20" fill="currentColor" opacity="0.9"/>
+      <rect x="17" y="28" width="6" height="12" fill="currentColor" opacity="0.6" rx="1"/>
+    </g>`
+  };
+}
+
 function buildCard(city, large = true) {
   const size = large ? "gacha-card" : "gacha-mini";
   const popStr = city.pop >= 1000000
     ? (city.pop / 1000000).toFixed(1) + "M hab."
     : Math.round(city.pop / 1000) + "k hab.";
+  const visual = getCityVisual(city.name);
+
+  // Couleur d'accent selon rareté
+  const colors = { common:"#64748b", rare:"#3b82f6", epic:"#f59e0b", legendary:"#a855f7" };
+  const color = colors[city.rarity] || "#64748b";
 
   if (!large) {
-    return `<div class="${size} ${city.rarity}" title="${city.name} · ${city.region}">
-      <span class="gacha-mini-emoji">${city.emoji}</span>
-      <div class="gacha-mini-name">${city.name}</div>
+    return `<div class="${size} ${city.rarity}" title="${city.name} · ${city.region}" style="position:relative;overflow:hidden;">
+      <svg viewBox="0 0 100 60" style="position:absolute;inset:0;width:100%;height:60%;opacity:0.18;" xmlns="http://www.w3.org/2000/svg">
+        <path d="${visual.silhouette}" fill="${color}"/>
+      </svg>
+      <span class="gacha-mini-emoji" style="position:relative;z-index:1;">${city.emoji}</span>
+      <div class="gacha-mini-name" style="position:relative;z-index:1;">${city.name}</div>
     </div>`;
   }
 
-  return `<div class="gacha-card ${city.rarity}">
+  return `<div class="gacha-card ${city.rarity}" style="position:relative;overflow:hidden;min-height:280px;">
+    <!-- Silhouette de fond -->
+    <svg viewBox="0 0 100 60" preserveAspectRatio="xMidYMax meet"
+      style="position:absolute;bottom:0;left:0;width:100%;height:auto;opacity:0.12;pointer-events:none;"
+      xmlns="http://www.w3.org/2000/svg">
+      <path d="${visual.silhouette}" fill="${color}"/>
+    </svg>
+    <!-- Illustration centrale ville -->
+    <div style="position:relative;width:100%;height:110px;display:flex;align-items:center;justify-content:center;margin-bottom:6px;">
+      <svg viewBox="0 0 100 60" style="width:160px;height:96px;color:${color};" xmlns="http://www.w3.org/2000/svg">
+        <!-- Silhouette -->
+        <path d="${visual.silhouette}" fill="${color}" opacity="0.15"/>
+        <!-- Landmark -->
+        ${visual.landmark}
+      </svg>
+    </div>
+    <!-- Badge rareté -->
     <span class="gacha-card-badge">${RARITY_STARS[city.rarity]} ${RARITY_LABELS[city.rarity]}</span>
-    <div class="gacha-card-rarity">${RARITY_LABELS[city.rarity]}</div>
-    <span class="gacha-card-emoji">${city.emoji}</span>
-    <div class="gacha-card-name">${city.name}</div>
-    <div class="gacha-card-region">${city.region}</div>
-    <div style="border-top:1px solid rgba(0,0,0,0.08);margin-top:10px;padding-top:8px;">
-      <div class="gacha-card-stat"><span>Population</span><span>${popStr}</span></div>
+    <!-- Nom + région -->
+    <div style="position:relative;z-index:1;">
+      <div class="gacha-card-name">${city.name}</div>
+      <div class="gacha-card-region">${city.region}</div>
+      <div style="border-top:1px solid rgba(0,0,0,0.1);margin-top:10px;padding-top:8px;display:flex;justify-content:space-between;align-items:center;">
+        <div class="gacha-card-stat" style="display:block;">
+          <span style="font-size:1rem;">${city.emoji}</span>
+          <span style="margin-left:4px;">${popStr}</span>
+        </div>
+        <div style="font-size:0.55rem;font-family:'Space Mono',monospace;opacity:0.5;letter-spacing:0.1em;">TABITO</div>
+      </div>
     </div>
   </div>`;
 }
@@ -1681,12 +1947,24 @@ function renderGachaCollection() {
   }
   el.style.display = "grid";
   el.style.gridTemplateColumns = "repeat(3,1fr)";
-  // Sort: legendary > epic > rare > common, then by name
   const order = {legendary:0,epic:1,rare:2,common:3};
-  const sorted = [...state.collection].sort((a,b) => order[a.rarity]-order[b.rarity] || a.name.localeCompare(b.name));
-  el.innerHTML = sorted.map(city => {
+  // Deduplicate: group by name+rarity, count copies
+  const counts = {};
+  const unique = [];
+  for (const city of state.collection) {
+    const key = city.name + "|" + city.rarity;
+    if (!counts[key]) { counts[key] = 0; unique.push(city); }
+    counts[key]++;
+  }
+  unique.sort((a,b) => order[a.rarity]-order[b.rarity] || a.name.localeCompare(b.name));
+  el.innerHTML = unique.map(city => {
+    const key = city.name + "|" + city.rarity;
+    const count = counts[key];
     const mini = buildCard(city, false);
-    return `<div onclick="showCardDetail(${JSON.stringify(city).replace(/"/g,'&quot;')})">${mini}</div>`;
+    const badge = count > 1
+      ? `<div style="position:absolute;top:4px;right:4px;background:#1e293b;color:#fff;border-radius:99px;font-size:0.5rem;font-family:'Space Mono',monospace;padding:1px 5px;line-height:1.4;">x${count}</div>`
+      : "";
+    return `<div style="position:relative;" onclick="showCardDetail(${JSON.stringify(city).replace(/"/g,'&quot;')})">${mini}${badge}</div>`;
   }).join("");
 }
 
