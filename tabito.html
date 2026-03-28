@@ -367,15 +367,6 @@
 </head>
 <body>
 
-<div id="discovery-overlay" style="position:fixed; inset:0; z-index:9999; background:#000; display:none; flex-direction:column; align-items:center; justify-content:center; color:white; font-family:'Syne',sans-serif; text-align:center; transition:opacity 1s ease-in-out;">
-  <div id="discovery-content" style="transform:scale(0.8); opacity:0; transition:all 1.5s ease-out;">
-    <p style="font-family:'Space Mono',monospace; font-size:0.8rem; letter-spacing:0.3em; color:#3b82f6; margin-bottom:20px;">NOUVELLE DESTINATION</p>
-    <h2 id="discovery-city-name" style="font-size:3rem; font-weight:800; text-transform:uppercase;"></h2>
-    <div id="discovery-card-anchor" style="margin-top:30px; display:flex; justify-content:center;"></div>
-    <p style="margin-top:20px; font-family:'Space Mono',monospace; font-size:0.6rem; opacity:0.6;">Appuyez pour continuer</p>
-  </div>
-</div>
- 
 <div id="map"></div>
 <div id="logo"><h1>Tabito</h1><p>explorez l'inconnu</p></div>
 
@@ -1855,52 +1846,13 @@ const RARITY_COLORS = {
   legendary: { accent:"#6b21a8", card:"#f5d0fe", border:"#a855f7" },
 };
 
-/**
- * Calcule et génère le tracé du périmètre pour les cartes spéciales
- */
-function generatePerimeterPath(geoJson, width, height) {
-  if (!geoJson || !geoJson.geometry) return "";
-  
-  // Gestion Polygone ou MultiPolygone (OSM renvoie souvent des MultiPolygones pour les villes)
-  let coords = [];
-  if (geoJson.geometry.type === "Polygon") {
-    coords = geoJson.geometry.coordinates[0];
-  } else if (geoJson.geometry.type === "MultiPolygon") {
-    // On prend le polygone principal (le plus grand)
-    coords = geoJson.geometry.coordinates.reduce((prev, current) => 
-      current[0].length > prev.length ? current[0] : prev, geoJson.geometry.coordinates[0][0]);
-  }
-
-  if (!coords || coords.length === 0) return "";
-
-  const lats = coords.map(c => c[1]);
-  const lngs = coords.map(c => c[0]);
-  const minLat = Math.min(...lats), maxLat = Math.max(...lats);
-  const minLng = Math.min(...lngs), maxLng = Math.max(...lngs);
-
-  // Marge pour ne pas coller aux bords du cadre photo de la carte
-  const margin = 8;
-  const points = coords.map(c => {
-    const x = margin + ((c[0] - minLng) / (maxLng - minLng)) * (width - 2 * margin);
-    const y = (height - margin) - ((c[1] - minLat) / (maxLat - minLat)) * (height - 2 * margin);
-    return `${x.toFixed(1)},${y.toFixed(1)}`;
-  });
-
-  return `<polyline points="${points.join(' ')}" fill="none" stroke="currentColor" stroke-width="0.7" stroke-dasharray="2,2" opacity="0.6" />`;
-}
- 
 function buildCard(city, large = true) {
   const popStr = city.pop >= 1000000
     ? (city.pop / 1000000).toFixed(1) + "M hab."
     : Math.round(city.pop / 1000) + "k hab.";
   const visual = getCityVisual(city.name);
   const rc = RARITY_COLORS[city.rarity] || RARITY_COLORS.common;
-  const c = rc.accent; 
-
-  // On génère le périmètre si c'est une carte spéciale (100%)
-  const perimeterSvg = (city.special && city.boundary) 
-    ? generatePerimeterPath(city.boundary, 100, 55) 
-    : "";
+  const c = rc.accent; // couleur landmark
 
   if (!large) {
     const svgContent = visual.svg(c);
@@ -1909,7 +1861,6 @@ function buildCard(city, large = true) {
         <path d="${visual.sil}" fill="${c}"/>
       </svg>
       <svg viewBox="0 0 100 55" style="width:52px;height:30px;display:block;margin:0 auto;" xmlns="http://www.w3.org/2000/svg">
-        <g style="color:${c}">${perimeterSvg}</g>
         ${svgContent}
       </svg>
       <div class="gacha-mini-name">${city.name}</div>
@@ -1920,13 +1871,14 @@ function buildCard(city, large = true) {
   return `<div class="gacha-card ${city.rarity}">
     <span class="gacha-card-badge">${RARITY_STARS[city.rarity]} ${RARITY_LABELS[city.rarity]}</span>
     <div style="position:relative;width:100%;height:120px;overflow:hidden;border-radius:10px;margin-bottom:10px;background:${rc.card};display:flex;align-items:flex-end;justify-content:center;">
+      <!-- Silhouette de sol -->
       <svg viewBox="0 0 100 55" preserveAspectRatio="xMidYMax slice"
         style="position:absolute;bottom:0;left:0;width:100%;height:100%;opacity:0.2;"
         xmlns="http://www.w3.org/2000/svg">
         <path d="${visual.sil}" fill="${c}"/>
       </svg>
+      <!-- Landmark centré -->
       <svg viewBox="0 0 100 55" style="width:180px;height:98px;position:relative;z-index:1;flex-shrink:0;" xmlns="http://www.w3.org/2000/svg">
-        <g style="color:${c}">${perimeterSvg}</g>
         ${svgContent}
       </svg>
     </div>
@@ -1941,6 +1893,7 @@ function buildCard(city, large = true) {
     </div>
   </div>`;
 }
+
 // Construit les tokens (points bleus)
 function renderTokens(draws) {
   const el = document.getElementById("gacha-tokens");
@@ -2020,86 +1973,41 @@ document.getElementById("gacha-close").addEventListener("click", () => {
   document.getElementById("gacha-panel").style.display = "none";
 });
 
-// --- AJOUTER ICI (Juste avant function gachaDraw) ---
-async function playSpaceZoomAnimation(cityObj) {
-  const overlay = document.getElementById('discovery-overlay');
-  const content = document.getElementById('discovery-content');
-  const cityNameEl = document.getElementById('discovery-city-name');
-  
-  cityNameEl.textContent = cityObj.name;
-  overlay.style.display = 'flex';
-  overlay.style.opacity = '1';
-  
-  // 1. Décollage (on monte très haut)
-  map.flyTo(map.getCenter(), 3, { duration: 1.5 });
-  await new Promise(r => setTimeout(r, 1600));
-
-  // 2. Voyage vers la ville
-  map.flyTo([cityObj.lat, cityObj.lng], 5, { duration: 2 });
-  await new Promise(r => setTimeout(r, 2100));
-
-  // 3. Plongeon final (Zoom 13)
-  map.flyTo([cityObj.lat, cityObj.lng], 13, { duration: 2.5 });
-
-  // 4. Apparition du nom et de la carte
-  setTimeout(() => {
-    overlay.style.background = "rgba(0,0,0,0.7)";
-    content.style.opacity = '1';
-    content.style.transform = 'scale(1)';
-    document.getElementById('discovery-card-anchor').innerHTML = buildCard(cityObj, true);
-  }, 1200);
-
-  overlay.onclick = () => {
-    overlay.style.opacity = '0';
-    setTimeout(() => { 
-      overlay.style.display = 'none'; 
-      content.style.opacity = '0';
-      overlay.style.background = "#000";
-    }, 1000);
-  };
-}
-
 function gachaDraw() {
   const state = loadGachaState();
   if (state.draws <= 0) return;
 
-  // 1. Roll la rareté et la ville
+  // Consume draw
+  state.draws--;
+  saveGachaState(state);
+
+  // Roll
   const rarity = rollRarity();
   const city = drawCity(rarity);
 
-  // 2. Vérifier si c'est une nouvelle découverte
-  const isNew = !state.collection.some(c => c.name === city.name);
-
-  // 3. Sauvegarder
-  state.draws--;
+  // Add to collection (allow duplicates — comme un vrai gacha)
   state.collection = state.collection || [];
   state.collection.push(city);
   saveGachaState(state);
 
-  // 4. Logique d'affichage
-  if (isNew) {
-    // Si nouvelle ville : Animation Globe + Zoom
-    playSpaceZoomAnimation(city);
-    // On ferme le panneau gacha pour voir la carte
-    document.getElementById("gacha-panel").style.display = "none";
-  } else {
-    // Si doublon : Affichage simple habituel
-    const overlay = document.getElementById("gacha-overlay");
-    overlay.style.display = "flex";
-    document.getElementById("gacha-overlay-card").innerHTML = buildCard(city, true);
-    overlay.onclick = (e) => {
-      if (e.target === overlay) {
-        overlay.style.display = "none";
-        const s2 = refreshGachaDraws();
-        renderTokens(s2.draws);
-        renderGachaCollection();
-      }
-    };
-    showToast(RARITY_STARS[rarity], `${city.name} (Doublon)`);
-  }
+  // Show overlay reveal
+  const overlay = document.getElementById("gacha-overlay");
+  overlay.style.display = "flex";
+  document.getElementById("gacha-overlay-card").innerHTML = buildCard(city, true);
+  overlay.onclick = (e) => {
+    if (e.target === overlay) {
+      overlay.style.display = "none";
+      // Refresh panel
+      const s2 = refreshGachaDraws();
+      renderTokens(s2.draws);
+      renderNextInfo(s2);
+      document.getElementById("gacha-draw-btn").disabled = s2.draws <= 0;
+      document.getElementById("gacha-draw-btn").style.opacity = s2.draws > 0 ? "1" : "0.5";
+      renderGachaCollection();
+    }
+  };
 
   updateGachaChip(state.draws);
-}
   showToast(RARITY_STARS[rarity], `${city.name} — ${RARITY_LABELS[rarity]} !`);
 }
 // draw button uses onclick in HTML
@@ -2118,26 +2026,20 @@ document.getElementById("gacha-reveal-close").addEventListener("click", () => {
 function grantCityCompletionCard(cityName) {
   const match = GACHA_CITIES.find(c => c.name.toLowerCase() === cityName.toLowerCase());
   if (!match) return;
-  
   const state = loadGachaState();
   state.collection = state.collection || [];
-  
-  // CRUCIAL : On injecte 'currentCityBoundary' (la variable OSM) dans la carte
-  const specialCard = { 
-    ...match, 
-    rarity: "legendary", 
-    special: true, 
-    boundary: typeof currentCityBoundary !== 'undefined' ? currentCityBoundary : null 
-  };
-  
+  // Ajouter avec marqueur special
+  const specialCard = { ...match, rarity:"legendary", special:true };
   state.collection.push(specialCard);
   saveGachaState(state);
-  
-  // Affichage du reveal... (le reste de ta fonction ne change pas)
+  // Reveal
   const overlay = document.getElementById("gacha-overlay");
   overlay.style.display = "flex";
   const cardHtml = buildCard(specialCard, true);
-  // ...
+  document.getElementById("gacha-overlay-card").innerHTML =
+    `<div style="text-align:center;margin-bottom:12px;font-family:'Space Mono',monospace;font-size:0.7rem;color:#fff;">✨ Ville complétée à 100% !</div>` + cardHtml;
+  overlay.onclick = (e) => { if (e.target === overlay) overlay.style.display = "none"; };
+  showToast("✨", `Carte spéciale ${cityName} débloquée !`);
 }
 
 // Init gacha au démarrage
