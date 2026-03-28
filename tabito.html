@@ -367,6 +367,15 @@
 </head>
 <body>
 
+<div id="discovery-overlay" style="position:fixed; inset:0; z-index:9999; background:#000; display:none; flex-direction:column; align-items:center; justify-content:center; color:white; font-family:'Syne',sans-serif; text-align:center; transition:opacity 1s ease-in-out;">
+  <div id="discovery-content" style="transform:scale(0.8); opacity:0; transition:all 1.5s ease-out;">
+    <p style="font-family:'Space Mono',monospace; font-size:0.8rem; letter-spacing:0.3em; color:#3b82f6; margin-bottom:20px;">NOUVELLE DESTINATION</p>
+    <h2 id="discovery-city-name" style="font-size:3rem; font-weight:800; text-transform:uppercase;"></h2>
+    <div id="discovery-card-anchor" style="margin-top:30px; display:flex; justify-content:center;"></div>
+    <p style="margin-top:20px; font-family:'Space Mono',monospace; font-size:0.6rem; opacity:0.6;">Appuyez pour continuer</p>
+  </div>
+</div>
+ 
 <div id="map"></div>
 <div id="logo"><h1>Tabito</h1><p>explorez l'inconnu</p></div>
 
@@ -1557,8 +1566,8 @@ function saveGachaState(state) {
   try { localStorage.setItem(GACHA_KEY, JSON.stringify(state)); } catch {}
 }
 
-const MAX_DRAWS = 5;
-const KM_PER_DRAW = 5;
+const MAX_DRAWS = 20;
+const KM_PER_DRAW = 0.001;
 
 // Calcule combien de tirages sont disponibles
 function computeDraws(state) {
@@ -2011,41 +2020,86 @@ document.getElementById("gacha-close").addEventListener("click", () => {
   document.getElementById("gacha-panel").style.display = "none";
 });
 
+// --- AJOUTER ICI (Juste avant function gachaDraw) ---
+async function playSpaceZoomAnimation(cityObj) {
+  const overlay = document.getElementById('discovery-overlay');
+  const content = document.getElementById('discovery-content');
+  const cityNameEl = document.getElementById('discovery-city-name');
+  
+  cityNameEl.textContent = cityObj.name;
+  overlay.style.display = 'flex';
+  overlay.style.opacity = '1';
+  
+  // 1. Décollage (on monte très haut)
+  map.flyTo(map.getCenter(), 3, { duration: 1.5 });
+  await new Promise(r => setTimeout(r, 1600));
+
+  // 2. Voyage vers la ville
+  map.flyTo([cityObj.lat, cityObj.lng], 5, { duration: 2 });
+  await new Promise(r => setTimeout(r, 2100));
+
+  // 3. Plongeon final (Zoom 13)
+  map.flyTo([cityObj.lat, cityObj.lng], 13, { duration: 2.5 });
+
+  // 4. Apparition du nom et de la carte
+  setTimeout(() => {
+    overlay.style.background = "rgba(0,0,0,0.7)";
+    content.style.opacity = '1';
+    content.style.transform = 'scale(1)';
+    document.getElementById('discovery-card-anchor').innerHTML = buildCard(cityObj, true);
+  }, 1200);
+
+  overlay.onclick = () => {
+    overlay.style.opacity = '0';
+    setTimeout(() => { 
+      overlay.style.display = 'none'; 
+      content.style.opacity = '0';
+      overlay.style.background = "#000";
+    }, 1000);
+  };
+}
+
 function gachaDraw() {
   const state = loadGachaState();
   if (state.draws <= 0) return;
 
-  // Consume draw
-  state.draws--;
-  saveGachaState(state);
-
-  // Roll
+  // 1. Roll la rareté et la ville
   const rarity = rollRarity();
   const city = drawCity(rarity);
 
-  // Add to collection (allow duplicates — comme un vrai gacha)
+  // 2. Vérifier si c'est une nouvelle découverte
+  const isNew = !state.collection.some(c => c.name === city.name);
+
+  // 3. Sauvegarder
+  state.draws--;
   state.collection = state.collection || [];
   state.collection.push(city);
   saveGachaState(state);
 
-  // Show overlay reveal
-  const overlay = document.getElementById("gacha-overlay");
-  overlay.style.display = "flex";
-  document.getElementById("gacha-overlay-card").innerHTML = buildCard(city, true);
-  overlay.onclick = (e) => {
-    if (e.target === overlay) {
-      overlay.style.display = "none";
-      // Refresh panel
-      const s2 = refreshGachaDraws();
-      renderTokens(s2.draws);
-      renderNextInfo(s2);
-      document.getElementById("gacha-draw-btn").disabled = s2.draws <= 0;
-      document.getElementById("gacha-draw-btn").style.opacity = s2.draws > 0 ? "1" : "0.5";
-      renderGachaCollection();
-    }
-  };
+  // 4. Logique d'affichage
+  if (isNew) {
+    // Si nouvelle ville : Animation Globe + Zoom
+    playSpaceZoomAnimation(city);
+    // On ferme le panneau gacha pour voir la carte
+    document.getElementById("gacha-panel").style.display = "none";
+  } else {
+    // Si doublon : Affichage simple habituel
+    const overlay = document.getElementById("gacha-overlay");
+    overlay.style.display = "flex";
+    document.getElementById("gacha-overlay-card").innerHTML = buildCard(city, true);
+    overlay.onclick = (e) => {
+      if (e.target === overlay) {
+        overlay.style.display = "none";
+        const s2 = refreshGachaDraws();
+        renderTokens(s2.draws);
+        renderGachaCollection();
+      }
+    };
+    showToast(RARITY_STARS[rarity], `${city.name} (Doublon)`);
+  }
 
   updateGachaChip(state.draws);
+}
   showToast(RARITY_STARS[rarity], `${city.name} — ${RARITY_LABELS[rarity]} !`);
 }
 // draw button uses onclick in HTML
