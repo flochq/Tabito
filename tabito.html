@@ -1,4 +1,5 @@
 
+
 <!DOCTYPE html>
 <html lang="fr">
 <head>
@@ -371,6 +372,22 @@
     100% { transform:translate(-50%,-50%) translate(var(--dx),var(--dy)); opacity:0; }
   }
 
+  /* City burst animations */
+  @keyframes burst-ring {
+    0%   { transform:translate(-50%,-50%) scale(0); opacity:0.9; }
+    60%  { opacity:0.5; }
+    100% { transform:translate(-50%,-50%) scale(3.5); opacity:0; }
+  }
+  @keyframes burst-rise {
+    0%   { transform:translateY(60px) scale(0.2); opacity:0; }
+    60%  { opacity:1; }
+    100% { transform:translateY(0px) scale(1); opacity:1; }
+  }
+  @keyframes burst-label {
+    0%   { transform:translateY(20px); opacity:0; }
+    100% { transform:translateY(0);    opacity:1; }
+  }
+
   .leaflet-control-attribution { display: none; }
   .leaflet-control-zoom { display: none; }
 </style>
@@ -506,7 +523,7 @@
   <!-- Globe canvas zone -->
   <div id="globe-zone" style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:20px;position:relative;width:100%;">
     <div id="globe-stars" style="position:absolute;inset:0;pointer-events:none;"></div>
-    <canvas id="globe-canvas" width="280" height="280" style="border-radius:50%;position:relative;z-index:1;"></canvas>
+    <canvas id="globe-canvas" width="280" height="280" style="border-radius:50%;position:relative;z-index:1;width:280px;height:280px;"></canvas>
     <div id="globe-status" style="font-family:'Space Mono',monospace;font-size:0.65rem;color:rgba(255,255,255,0.45);letter-spacing:0.1em;min-height:1.2em;z-index:1;"></div>
   </div>
   <!-- Tokens + Draw button -->
@@ -1683,8 +1700,8 @@ const RARITY_WEIGHTS = { common:65, rare:25, epic:8, legendary:2 };
 const RARITY_LABELS  = { common:"Commun", rare:"Rare", epic:"Épique", legendary:"Légendaire" };
 const RARITY_STARS   = { common:"⚪", rare:"🔵", epic:"🟡", legendary:"🟣" };
 const GACHA_KEY = `${STORAGE_KEY}-gacha`;
-const MAX_DRAWS = 5;
-const KM_PER_DRAW = 5;
+const MAX_DRAWS = 30;
+const KM_PER_DRAW = 0.001;
 
 function loadGachaState() {
   try { return JSON.parse(localStorage.getItem(GACHA_KEY) || "null") || {draws:0,lastDaily:null,kmAtLastDraw:0,collection:[]}; }
@@ -1743,22 +1760,151 @@ let globeState = { lon0:10, lat0:20, phase:'idle', spinSpeed:0.35,
                    zoomT:0, zoomScale:1 };
 
 const LAND_POLYS = [
+  // ── EUROPE ──────────────────────────────────────────────────────────
   // France
   [[48.4,2.5],[51.1,2.5],[51.5,4.5],[50.8,6.2],[49.5,8.2],[47.6,7.6],[46.4,6.8],
    [45.9,7.1],[43.8,7.7],[43.3,5.1],[42.4,3.1],[42.7,1.8],[43.3,-1.8],[47.5,-2.2],
    [48.7,-1.5],[49.7,-0.2],[50.9,1.7],[51.1,2.5]],
   // Iberia
-  [[43.8,-9],[43.8,3.3],[40.0,3.2],[38.0,-0.5],[36.0,-5.5],[36.2,-8.8],[38.0,-9.5],[43.8,-9]],
-  // UK
-  [[51.5,-6],[58.6,-5],[60.8,-0.5],[58.0,2.0],[53.5,2.0],[50.0,2.0],[50.2,-5.5],[52.0,-5],[51.5,-6]],
-  // Central Europe
-  [[51.5,6],[54.5,8],[55.0,15],[48.5,17],[46.5,9],[47.5,7.6],[50.0,6],[51.5,6]],
-  // Italy
-  [[44.0,7.5],[46.5,13.5],[46.0,15],[40.7,16],[38.0,16],[37.5,15],[38.0,13],[40.5,14.5],[44.0,12.5],[44.0,7.5]],
-  // Scandinavia
-  [[55.0,8],[58.0,5],[62.0,5],[71.5,25],[69.0,30],[65.0,26],[60.0,25],[55.0,13],[55.0,8]],
-  // North Africa
-  [[35.5,-6],[37.0,10],[32.0,13],[30.0,32],[22.0,37],[20.0,20],[20.0,-17],[27.0,-13],[35.5,-6]],
+  [[43.8,-9.5],[44.0,-1.7],[43.4,3.3],[41.0,3.2],[39.0,0.2],[37.5,-0.5],[36.0,-5.3],
+   [36.0,-8.9],[37.5,-9.5],[40.0,-8.8],[43.8,-9.5]],
+  // UK + Ireland
+  [[50.0,-5.7],[51.5,-5.0],[52.0,-4.0],[53.5,-3.0],[55.0,-1.5],[58.6,-3.0],[58.8,-3.0],
+   [60.8,-1.0],[58.0,1.8],[53.5,1.8],[51.5,1.5],[50.0,-0.5],[50.0,-5.7]],
+  [[53.4,-10.3],[54.5,-8.2],[55.3,-6.0],[54.0,-5.5],[52.0,-6.0],[51.5,-9.5],[53.4,-10.3]],
+  // Benelux + Germany + Poland
+  [[51.5,4.5],[53.5,7.0],[55.0,8.5],[55.5,12.0],[54.5,14.0],[52.0,14.5],[50.0,18.5],
+   [49.0,18.0],[47.5,13.5],[47.5,9.5],[48.5,8.0],[49.5,6.5],[51.5,6.0],[51.5,4.5]],
+  // Scandinavia + Finland
+  [[55.5,8.0],[57.5,8.5],[58.0,6.0],[62.5,5.0],[65.0,14.0],[70.0,18.0],[71.5,26.0],
+   [70.0,28.0],[69.0,30.0],[65.0,25.5],[60.0,25.0],[59.5,24.0],[59.5,22.0],[60.0,19.0],
+   [57.0,18.0],[56.5,16.5],[55.5,13.0],[55.5,8.0]],
+  // Italy + Balkans rough
+  [[44.0,7.5],[46.5,13.5],[46.0,15.0],[45.5,14.0],[44.0,15.5],[42.0,15.0],[40.0,18.5],
+   [38.0,16.0],[38.5,15.5],[37.5,15.0],[38.5,13.5],[40.5,14.5],[44.0,12.5],[44.0,7.5]],
+  // Balkans + Romania + Greece
+  [[46.5,15.5],[48.0,17.0],[47.5,22.5],[47.0,24.0],[45.0,29.5],[44.0,28.5],[43.5,28.5],
+   [42.0,28.0],[41.5,26.5],[40.0,26.5],[37.0,22.0],[36.5,22.5],[36.0,28.0],[37.0,27.5],
+   [38.0,26.0],[41.5,26.5],[44.0,23.5],[46.5,21.0],[47.0,18.5],[46.5,15.5]],
+  // Eastern Europe / Baltic
+  [[56.0,21.0],[57.5,22.0],[59.5,24.0],[59.5,27.5],[56.0,28.5],[54.0,27.0],[54.5,22.0],[56.0,21.0]],
+
+  // ── AFRICA ──────────────────────────────────────────────────────────
+  // Main Africa
+  [[37.0,-6.0],[37.5,10.0],[33.0,11.5],[30.0,32.5],[27.0,34.0],[22.0,37.0],[15.0,42.0],
+   [12.0,43.5],[11.0,42.5],[8.0,34.5],[4.5,35.0],[2.0,41.5],[0.0,42.0],[-4.0,40.0],
+   [-11.0,37.0],[-17.0,14.5],[-17.5,10.0],[-15.0,0.0],[-10.0,-4.0],[-5.0,-9.5],
+   [0.0,-6.0],[9.0,-5.5],[16.5,-6.5],[25.0,-18.0],[32.5,-18.0],[35.5,-15.0],
+   [36.0,-22.0],[34.0,-26.5],[32.0,-30.0],[29.0,-33.5],[26.0,-34.0],[20.0,-35.0],
+   [17.0,-33.0],[16.5,-28.0],[12.0,-17.0],[11.5,-8.5],[9.0,1.0],[3.0,4.5],[1.0,-3.0],
+   [-5.0,-4.0],[-8.0,0.0],[-16.0,7.5],[-16.0,12.0],[-16.5,14.5],[-17.0,14.5],
+   [7.5,37.0],[10.0,37.5],[14.0,33.0],[22.0,30.0],[25.0,22.0],[24.0,19.5],[23.0,14.5],
+   [14.0,13.0],[13.0,14.5],[15.0,22.0],[20.0,22.0],[20.0,30.0],[25.0,32.5],[27.0,34.0]],
+  // Madagascar
+  [[-12.0,49.0],[-13.5,48.5],[-16.0,44.0],[-18.0,44.0],[-20.5,44.5],[-23.0,43.5],
+   [-25.5,44.5],[-25.5,46.5],[-23.5,48.0],[-20.0,48.5],[-16.0,50.0],[-12.0,49.0]],
+
+  // ── ASIA ────────────────────────────────────────────────────────────
+  // Russia / Eurasia mass (simplified greatly)
+  [[70.0,32.0],[69.0,33.0],[68.5,40.0],[65.0,42.0],[60.0,43.5],[57.0,41.0],[55.0,38.0],
+   [46.0,38.0],[44.0,34.0],[42.0,35.0],[42.0,45.0],[47.0,47.0],[47.5,52.0],[51.0,51.5],
+   [53.0,59.0],[56.0,60.5],[56.0,70.0],[53.0,73.5],[51.0,80.0],[54.0,83.0],[52.0,86.0],
+   [55.0,83.0],[58.0,82.5],[61.0,90.0],[65.0,87.5],[67.0,78.0],[68.5,73.5],[72.0,80.0],
+   [73.5,80.0],[73.0,105.0],[72.5,110.0],[75.0,130.0],[73.0,140.0],[70.0,140.0],
+   [65.0,143.0],[60.0,141.0],[53.0,141.0],[46.5,135.0],[43.0,132.0],[42.5,130.0],
+   [38.5,131.0],[35.5,130.5],[34.5,129.0],[38.0,128.5],[38.5,124.0],[33.0,120.0],
+   [32.0,119.5],[30.0,122.0],[26.0,119.5],[24.0,118.0],[25.0,110.0],[20.0,110.0],
+   [18.5,109.0],[21.5,108.5],[22.0,104.0],[23.0,104.0],[21.5,100.0],[19.0,98.5],
+   [16.5,98.5],[13.5,98.0],[8.5,98.0],[4.0,100.5],[1.5,104.0],[1.0,104.5],
+   [5.0,115.0],[7.0,117.0],[4.0,117.5],[4.0,108.0],[2.0,104.0],[0.0,104.0],
+   [-8.0,115.0],[-8.5,117.5],[-8.0,125.5],[-9.5,124.0],[-10.5,123.0],
+   [10.0,99.0],[14.0,100.5],[18.0,102.5],[22.0,103.5],[23.0,97.5],[28.0,97.0],
+   [27.5,90.0],[26.5,87.0],[26.0,80.0],[23.0,68.0],[22.0,63.0],[24.5,57.0],
+   [23.5,56.5],[22.5,59.5],[20.0,58.5],[16.5,53.0],[12.5,45.0],[12.0,44.5],
+   [11.0,43.0],[12.0,43.5],[15.0,42.0],[22.0,37.0],[27.0,34.0],[30.0,32.5],
+   [31.5,34.5],[33.0,36.0],[36.5,36.5],[36.5,40.5],[38.5,40.5],[39.5,43.0],
+   [42.0,45.0],[42.0,50.0],[47.0,53.0],[51.0,59.5],[53.0,60.5],[56.0,61.0],
+   [60.0,60.5],[62.0,55.0],[65.0,42.0],[68.0,40.5],[70.0,32.0]],
+  // Japan (main islands)
+  [[31.0,131.0],[33.0,131.5],[34.5,131.0],[35.5,133.0],[35.5,136.5],[37.5,137.5],
+   [40.0,141.0],[41.5,141.5],[40.5,140.0],[38.0,141.5],[36.5,140.0],[35.5,136.5],
+   [34.0,135.0],[33.0,131.5],[31.0,131.0]],
+  [[41.5,140.5],[42.5,141.0],[43.5,142.0],[44.5,143.0],[44.5,145.5],[43.5,145.0],
+   [42.0,143.5],[41.5,141.5],[41.5,140.5]],
+  // Indian Subcontinent
+  [[24.0,68.0],[28.0,64.0],[30.0,66.5],[32.0,69.0],[35.0,70.0],[37.0,71.0],[37.5,74.5],
+   [36.0,76.0],[34.5,73.0],[32.5,74.5],[30.0,76.0],[27.5,88.5],[26.0,90.0],[23.5,91.5],
+   [22.0,92.5],[20.5,92.0],[22.0,88.5],[21.5,86.5],[20.0,85.5],[17.0,82.5],[15.0,80.0],
+   [13.5,80.5],[10.0,80.0],[8.0,77.5],[8.0,76.0],[9.5,77.0],[12.0,75.0],[14.5,74.5],
+   [15.0,73.5],[16.5,73.5],[18.5,72.8],[20.0,72.5],[21.0,69.5],[22.0,68.5],[23.0,68.0],
+   [24.0,68.0]],
+  // Arabia
+  [[30.5,32.5],[29.5,35.0],[29.0,36.0],[27.5,37.5],[24.5,38.0],[19.5,40.5],[15.0,42.5],
+   [12.5,45.0],[14.0,48.5],[17.5,52.5],[22.0,59.5],[23.5,57.5],[24.5,57.0],[22.0,55.5],
+   [22.0,51.5],[24.0,51.0],[26.0,50.5],[26.5,49.5],[28.0,48.5],[29.5,47.5],[29.0,46.5],
+   [31.5,40.0],[32.5,38.5],[35.0,36.5],[36.5,36.5],[36.5,38.0],[37.5,40.0],[38.5,40.5],
+   [36.5,37.0],[35.5,35.5],[35.5,34.0],[33.5,33.0],[32.0,34.5],[31.0,34.5],[30.5,32.5]],
+
+  // ── NORTH AMERICA ────────────────────────────────────────────────────
+  // Mainland NA
+  [[70.0,-140.0],[68.5,-136.0],[66.0,-141.0],[63.0,-144.0],[60.0,-140.5],[59.0,-136.0],
+   [57.5,-136.0],[56.0,-130.0],[54.5,-130.5],[51.5,-128.5],[49.5,-124.5],[47.5,-122.5],
+   [46.5,-124.0],[46.0,-123.5],[38.5,-123.5],[35.5,-121.0],[34.0,-120.5],[32.5,-117.5],
+   [30.0,-115.0],[22.5,-110.0],[20.5,-105.0],[19.0,-104.5],[15.5,-92.5],[16.0,-90.0],
+   [15.0,-88.5],[16.0,-86.0],[14.0,-83.5],[9.5,-83.5],[7.5,-77.5],[7.5,-77.5],
+   [9.5,-77.5],[10.0,-75.0],[11.5,-73.5],[11.5,-71.0],[10.5,-66.5],[10.0,-62.5],
+   [11.0,-63.0],[11.5,-68.5],[12.5,-72.0],[14.0,-73.5],[17.5,-71.0],[20.0,-72.5],
+   [19.5,-70.0],[18.5,-69.5],[17.5,-71.5],[15.5,-73.5],[20.0,-75.5],[23.5,-75.5],
+   [25.5,-80.0],[24.5,-81.5],[25.0,-82.5],[29.5,-84.5],[30.0,-84.0],[30.0,-88.0],
+   [29.0,-89.0],[30.0,-90.0],[29.5,-93.5],[26.0,-97.0],[22.5,-97.5],[21.5,-98.5],
+   [21.0,-105.0],[23.5,-109.5],[24.5,-110.5],[28.0,-112.0],[29.5,-115.0],[32.5,-117.5],
+   [40.0,-124.0],[46.0,-124.0],[48.5,-124.5],[49.0,-123.0],[49.5,-125.0],[50.0,-127.0],
+   [54.0,-131.0],[56.0,-130.5],[58.5,-136.5],[59.5,-136.0],[60.5,-141.0],[68.0,-137.5],
+   [70.0,-140.0]],
+  // Greenland
+  [[60.0,-44.0],[62.0,-42.0],[64.5,-40.5],[65.5,-38.0],[68.0,-29.0],[72.0,-22.0],
+   [76.0,-18.5],[83.5,-30.0],[83.0,-35.0],[80.0,-17.0],[75.0,-18.0],[73.0,-23.0],
+   [72.5,-26.0],[68.0,-27.5],[66.5,-34.0],[63.5,-41.0],[60.0,-44.0]],
+  // Cuba
+  [[23.0,-84.5],[22.0,-84.0],[20.0,-77.5],[19.5,-74.5],[20.5,-75.5],[22.5,-79.5],[23.0,-84.5]],
+
+  // ── SOUTH AMERICA ────────────────────────────────────────────────────
+  [[12.5,-71.5],[11.5,-69.5],[10.5,-62.0],[9.5,-60.0],[8.5,-60.5],[6.5,-61.0],
+   [5.0,-61.0],[4.0,-60.0],[2.5,-60.5],[1.0,-60.0],[-1.0,-50.0],[-1.5,-48.5],
+   [-1.0,-44.5],[0.5,-44.5],[4.5,-43.5],[6.5,-40.0],[7.5,-36.0],[-3.5,-35.0],
+   [-8.5,-35.0],[-8.0,-35.5],[-10.5,-37.5],[-14.0,-39.0],[-16.0,-39.5],
+   [-19.0,-39.5],[-22.5,-43.0],[-23.0,-43.5],[-23.5,-44.5],[-26.0,-48.5],
+   [-28.0,-49.0],[-30.0,-50.5],[-31.0,-50.5],[-33.0,-52.5],[-34.0,-52.5],
+   [-34.5,-58.0],[-34.5,-57.5],[-34.0,-55.0],[-33.5,-53.0],[-34.5,-57.5],
+   [-38.0,-57.5],[-40.5,-62.0],[-42.0,-63.5],[-43.0,-65.0],[-46.0,-65.5],
+   [-46.5,-67.5],[-51.5,-69.0],[-52.5,-68.5],[-53.5,-68.0],[-55.0,-66.5],
+   [-55.5,-64.5],[-54.5,-63.5],[-53.5,-70.5],[-54.5,-65.0],[-53.5,-71.0],
+   [-52.0,-74.0],[-50.0,-75.0],[-47.5,-74.5],[-44.0,-73.0],[-42.0,-74.0],
+   [-40.0,-72.0],[-38.0,-73.5],[-36.0,-72.5],[-33.0,-71.5],[-30.0,-71.5],
+   [-28.0,-71.5],[-22.0,-70.0],[-18.5,-70.5],[-18.0,-70.5],[-17.0,-72.0],
+   [-15.5,-75.0],[-12.0,-77.0],[-10.0,-78.5],[-5.0,-81.5],[-3.0,-80.5],
+   [-1.0,-80.0],[0.5,-80.0],[1.5,-79.5],[3.0,-77.5],[7.5,-77.5],[7.5,-77.0],
+   [9.5,-77.5],[10.5,-75.5],[11.0,-73.5],[12.5,-71.5]],
+
+  // ── AUSTRALIA / OCEANIA ──────────────────────────────────────────────
+  [[-10.5,142.0],[-13.5,136.0],[-12.5,131.0],[-11.5,130.0],[-13.5,129.5],
+   [-15.0,128.5],[-16.5,123.5],[-20.5,116.0],[-22.0,114.0],[-26.5,113.5],
+   [-31.5,115.5],[-34.0,115.0],[-33.5,118.5],[-33.5,122.0],[-32.0,127.5],
+   [-31.5,130.0],[-32.5,133.5],[-32.0,133.5],[-33.5,137.5],[-35.5,138.5],
+   [-38.0,140.5],[-38.5,142.5],[-38.5,146.5],[-37.5,147.5],[-36.5,150.0],
+   [-33.5,151.0],[-30.0,153.0],[-28.0,153.5],[-25.5,153.0],[-24.0,151.5],
+   [-23.0,150.5],[-22.0,150.0],[-20.0,148.5],[-18.0,146.0],[-17.0,146.0],
+   [-15.5,145.0],[-14.0,143.5],[-10.5,142.0]],
+  // New Zealand - North Island
+  [[-34.5,173.0],[-37.0,175.5],[-37.5,178.0],[-39.5,176.5],[-41.0,174.5],
+   [-41.5,173.0],[-38.0,176.0],[-36.5,174.5],[-34.5,173.0]],
+
+  // ── ANTARCTICA ───────────────────────────────────────────────────────
+  [[-67.0,-70.0],[-68.0,-60.0],[-66.0,-45.0],[-67.0,-30.0],[-68.0,0.0],
+   [-66.5,30.0],[-66.0,60.0],[-68.0,90.0],[-66.0,120.0],[-68.0,150.0],
+   [-66.0,175.0],[-70.0,175.0],[-73.0,150.0],[-75.0,120.0],[-74.0,90.0],
+   [-75.0,60.0],[-74.0,30.0],[-74.0,0.0],[-75.0,-30.0],[-73.0,-60.0],
+   [-70.0,-70.0]],
 ];
 
 function globeProject(lat, lon, lon0, lat0, R) {
@@ -1773,8 +1919,16 @@ function globeProject(lat, lon, lon0, lat0, R) {
 function drawGlobeFrame() {
   const canvas = document.getElementById("globe-canvas");
   if (!canvas) return;
+  // Retina/HiDPI : taille logique fixe, résolution x dpr
+  const DPR = window.devicePixelRatio || 1;
+  const LOGICAL = 280;
+  if (canvas.width !== LOGICAL * DPR) {
+    canvas.width  = LOGICAL * DPR;
+    canvas.height = LOGICAL * DPR;
+  }
   const ctx = canvas.getContext("2d");
-  const W = canvas.width, CX = W/2, CY = W/2;
+  ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+  const W = LOGICAL, CX = W/2, CY = W/2;
   const gs = globeState;
   const zoom = gs.zoomScale;
   const R = (W/2 - 4) * zoom;
@@ -1817,18 +1971,27 @@ function drawGlobeFrame() {
     ctx.stroke();
   }
 
-  // Land
+  // Land — rendu par segments pour éviter les traits parasites à l'horizon
+  ctx.fillStyle='#1e5c33';
+  ctx.strokeStyle='rgba(60,200,100,0.18)';
+  ctx.lineWidth=0.6;
   for(const poly of LAND_POLYS){
     const pts=poly.map(([la,lo])=>globeProject(la,lo,gs.lon0,gs.lat0,R));
-    let started=false; ctx.beginPath();
+    // Découper en sous-segments tous visibles (z>0)
+    let seg=[];
+    const flush=()=>{
+      if(seg.length<2){seg=[];return;}
+      ctx.beginPath();
+      ctx.moveTo(CX+seg[0].x,CY-seg[0].y);
+      for(let i=1;i<seg.length;i++) ctx.lineTo(CX+seg[i].x,CY-seg[i].y);
+      ctx.fill(); ctx.stroke();
+      seg=[];
+    };
     for(const p of pts){
-      if(!p||p.z<=0){started=false;continue;}
-      if(!started){ctx.moveTo(CX+p.x,CY-p.y);started=true;}
-      else ctx.lineTo(CX+p.x,CY-p.y);
+      if(!p||p.z<0.02){flush();}  // seuil légèrement > 0 pour éviter le bord flou
+      else seg.push(p);
     }
-    ctx.closePath();
-    ctx.fillStyle='#1e5c33'; ctx.fill();
-    ctx.strokeStyle='rgba(60,200,100,0.2)'; ctx.lineWidth=0.7; ctx.stroke();
+    flush();
   }
 
   // Cities dots
@@ -1841,14 +2004,28 @@ function drawGlobeFrame() {
     ctx.fillStyle = isTarget ? '#fbbf24' : 'rgba(255,255,255,0.5)';
     ctx.fill();
     if(isTarget&&gs.phase==='zooming'){
-      ctx.strokeStyle='rgba(251,191,36,0.5)'; ctx.lineWidth=1.5;
-      ctx.beginPath(); ctx.arc(CX+p.x,CY-p.y,5+gs.zoomT*14,0,Math.PI*2); ctx.stroke();
+      // Halo pulsant autour de la ville cible
+      const haloR = 6 + gs.zoomT * 18;
+      const haloAlpha = 0.7 - gs.zoomT * 0.5;
+      ctx.strokeStyle=`rgba(251,191,36,${haloAlpha})`; ctx.lineWidth=2;
+      ctx.beginPath(); ctx.arc(CX+p.x,CY-p.y,haloR,0,Math.PI*2); ctx.stroke();
+      // Deuxième anneau décalé pour effet double
+      if(gs.zoomT > 0.2){
+        ctx.strokeStyle=`rgba(251,191,36,${haloAlpha*0.5})`;ctx.lineWidth=1;
+        ctx.beginPath(); ctx.arc(CX+p.x,CY-p.y,haloR*1.8,0,Math.PI*2); ctx.stroke();
+      }
     }
-    if(isTarget&&gs.phase==='zooming'&&gs.zoomT>0.3){
-      ctx.fillStyle='rgba(255,255,255,0.9)';
-      ctx.font=`bold 11px 'Space Mono',monospace`;
+    // Label ville : apparaît tôt et grossit avec le zoom
+    if(isTarget&&gs.phase==='zooming'&&gs.zoomT>0.15){
+      const labelAlpha = Math.min(1,(gs.zoomT-0.15)*3);
+      const fontSize = Math.round(10 + gs.zoomT*6);
+      ctx.fillStyle=`rgba(255,255,255,${labelAlpha})`;
+      ctx.font=`bold ${fontSize}px 'Space Mono',monospace`;
       ctx.textAlign='center';
-      ctx.fillText(city.name, CX+p.x, CY-p.y-10);
+      // Ombre portée
+      ctx.shadowColor='rgba(0,0,0,0.8)'; ctx.shadowBlur=6;
+      ctx.fillText(city.name, CX+p.x, CY-p.y-(8+gs.zoomT*10));
+      ctx.shadowBlur=0;
     }
   }
 
@@ -1882,15 +2059,125 @@ function globeLoop() {
     }
     drawGlobeFrame();
   } else if(gs.phase==='zooming'){
-    gs.zoomT=Math.min(1,gs.zoomT+0.018);
-    const ez=gs.zoomT<0.5?2*gs.zoomT*gs.zoomT:-1+(4-2*gs.zoomT)*gs.zoomT;
-    gs.zoomScale=1+ez*1.8;
+    // Phase rapide (0→0.6) puis lente (0.6→1) pour effet cinématique
+    const speed = gs.zoomT < 0.6 ? 0.022 : 0.012;
+    gs.zoomT = Math.min(1, gs.zoomT + speed);
+    // Easing exponentiel : zoom x40 à t=1 (≈ 1/1 000 000)
+    const ez = gs.zoomT < 0.5
+      ? 2 * gs.zoomT * gs.zoomT
+      : -1 + (4 - 2 * gs.zoomT) * gs.zoomT;
+    gs.zoomScale = 1 + ez * 39;  // max zoom x40
     drawGlobeFrame();
-    if(gs.zoomT>=1){ gs.phase='done'; showGachaReveal(); }
+    // Déclencher animation "sortie du sol" à zoomT=0.55 si nouvelle ville
+    if(gs.zoomT >= 0.55 && !gs.burstTriggered && gs.pendingIsNew){
+      gs.burstTriggered = true;
+      triggerCityBurst();
+    }
+    if(gs.zoomT >= 1){ gs.phase='done'; showGachaReveal(); }
   } else {
     drawGlobeFrame();
   }
   globeRaf=requestAnimationFrame(globeLoop);
+}
+
+
+// ── ANIMATION "SORTIE DU SOL" ────────────────────────────────────────
+function triggerCityBurst() {
+  const canvas = document.getElementById("globe-canvas");
+  const zone   = document.getElementById("globe-zone");
+  if (!canvas || !zone) return;
+
+  const city   = globeState.drawnCity;
+  if (!city) return;
+
+  // Récupérer les couleurs de rareté
+  const rc = (typeof RARITY_COLORS !== "undefined" && RARITY_COLORS[city.rarity])
+    ? RARITY_COLORS[city.rarity]
+    : { accent:"#2563eb", card:"#dbeafe" };
+  const accentColor = rc.accent;
+
+  // Obtenir le visuel SVG de la ville
+  const visual = (typeof getCityVisual === "function") ? getCityVisual(city.name) : null;
+  const svgLandmark = visual ? visual.svg(accentColor) : "";
+
+  // Créer l'overlay animé par-dessus le canvas
+  const existing = document.getElementById("city-burst-overlay");
+  if (existing) existing.remove();
+
+  const overlay = document.createElement("div");
+  overlay.id = "city-burst-overlay";
+
+  // Centrer sur le canvas (le canvas est au centre du globe-zone)
+  const canvasRect = canvas.getBoundingClientRect();
+  const zoneRect   = zone.getBoundingClientRect();
+  const cx = canvasRect.left - zoneRect.left + canvasRect.width  / 2;
+  const cy = canvasRect.top  - zoneRect.top  + canvasRect.height / 2;
+
+  overlay.style.cssText = `
+    position:absolute;
+    left:${cx}px; top:${cy}px;
+    transform:translate(-50%,-50%);
+    pointer-events:none;
+    z-index:10;
+    display:flex; flex-direction:column; align-items:center;
+  `;
+
+  // ── Cercles d'onde (ripple) ──────────────────────────────────────
+  const rippleWrap = document.createElement("div");
+  rippleWrap.style.cssText = "position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);";
+  for (let i = 0; i < 3; i++) {
+    const ring = document.createElement("div");
+    ring.style.cssText = `
+      position:absolute;
+      width:${20 + i*22}px; height:${20 + i*22}px;
+      border-radius:50%;
+      border:2px solid ${accentColor};
+      left:50%; top:50%;
+      transform:translate(-50%,-50%) scale(0);
+      opacity:0;
+      animation:burst-ring 1.4s ease-out ${i*0.18}s forwards;
+    `;
+    rippleWrap.appendChild(ring);
+  }
+  overlay.appendChild(rippleWrap);
+
+  // ── Landmark SVG qui monte ───────────────────────────────────────
+  if (svgLandmark) {
+    const landmarkWrap = document.createElement("div");
+    landmarkWrap.style.cssText = `
+      position:relative;
+      transform:translateY(60px) scale(0.2);
+      opacity:0;
+      animation:burst-rise 1.0s cubic-bezier(0.34,1.56,0.64,1) 0.15s forwards;
+    `;
+    landmarkWrap.innerHTML = `
+      <svg viewBox="0 0 100 55" width="110" height="60"
+           xmlns="http://www.w3.org/2000/svg"
+           style="filter:drop-shadow(0 4px 12px ${accentColor}88);">
+        ${svgLandmark}
+      </svg>`;
+    overlay.appendChild(landmarkWrap);
+  }
+
+  // ── Nom de la ville ──────────────────────────────────────────────
+  const nameEl = document.createElement("div");
+  nameEl.textContent = city.name;
+  nameEl.style.cssText = `
+    font-family:'Syne',sans-serif; font-weight:800;
+    font-size:1.1rem; color:#fff;
+    text-shadow:0 0 20px ${accentColor}, 0 2px 8px rgba(0,0,0,0.8);
+    margin-top:6px;
+    transform:translateY(20px); opacity:0;
+    animation:burst-label 0.6s ease-out 0.5s forwards;
+    white-space:nowrap;
+  `;
+  overlay.appendChild(nameEl);
+
+  zone.style.position = "relative";
+  zone.appendChild(overlay);
+
+  // Nettoyage après la fin de l'animation
+  setTimeout(() => overlay.remove(), 2400);
 }
 
 function makeStars() {
@@ -1977,6 +2264,7 @@ function globeDraw() {
   globeState.targetLon=city.lon;
   globeState.targetLat=Math.max(-40,Math.min(40,city.lat*0.7));
   globeState.phase='spinning';
+  globeState.burstTriggered=false;
 
   // Save for reveal
   globeState.pendingCity=city;
