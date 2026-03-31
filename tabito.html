@@ -1700,8 +1700,8 @@ const RARITY_WEIGHTS = { common:65, rare:25, epic:8, legendary:2 };
 const RARITY_LABELS  = { common:"Commun", rare:"Rare", epic:"Épique", legendary:"Légendaire" };
 const RARITY_STARS   = { common:"⚪", rare:"🔵", epic:"🟡", legendary:"🟣" };
 const GACHA_KEY = `${STORAGE_KEY}-gacha`;
-const MAX_DRAWS = 5;
-const KM_PER_DRAW = 5;
+const MAX_DRAWS = 30;
+const KM_PER_DRAW = 0.001;
 
 function loadGachaState() {
   try { return JSON.parse(localStorage.getItem(GACHA_KEY) || "null") || {draws:0,lastDaily:null,kmAtLastDraw:0,collection:[]}; }
