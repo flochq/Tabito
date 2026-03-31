@@ -1700,8 +1700,8 @@ const RARITY_WEIGHTS = { common:65, rare:25, epic:8, legendary:2 };
 const RARITY_LABELS  = { common:"Commun", rare:"Rare", epic:"Épique", legendary:"Légendaire" };
 const RARITY_STARS   = { common:"⚪", rare:"🔵", epic:"🟡", legendary:"🟣" };
 const GACHA_KEY = `${STORAGE_KEY}-gacha`;
-const MAX_DRAWS = 30;
-const KM_PER_DRAW = 0.001;
+const MAX_DRAWS = 5;
+const KM_PER_DRAW = 5;
 
 function loadGachaState() {
   try { return JSON.parse(localStorage.getItem(GACHA_KEY) || "null") || {draws:0,lastDaily:null,kmAtLastDraw:0,collection:[]}; }
@@ -1935,6 +1935,22 @@ function drawGlobeFrame() {
 
   ctx.clearRect(0,0,W,W);
 
+  // Pendant le zoom : translater pour centrer la ville cible
+  let panX = 0, panY = 0;
+  if (gs.phase === 'zooming' && gs.drawnCity) {
+    // Position projetée de la ville cible (sans zoom, rayon de base)
+    const Rbase = (W/2 - 4);
+    const tp = globeProject(gs.drawnCity.lat, gs.drawnCity.lon, gs.lon0, gs.lat0, Rbase);
+    if (tp && tp.z > 0) {
+      // Décalage pour ramener la ville au centre, progressif avec le zoom
+      const t = Math.min(1, (zoom - 1) / 5); // commence à s'aligner dès zoom x2
+      panX = -tp.x * t * zoom * 0.92;
+      panY =  tp.y * t * zoom * 0.92;
+    }
+  }
+  ctx.save();
+  ctx.translate(panX, panY);
+
   // Atmosphere
   const atm = ctx.createRadialGradient(CX,CY,R*0.88,CX,CY,R*1.18);
   atm.addColorStop(0,'rgba(37,99,235,0)');
@@ -2040,6 +2056,8 @@ function drawGlobeFrame() {
   // Rim
   ctx.strokeStyle='rgba(100,160,255,0.25)'; ctx.lineWidth=1.2;
   ctx.beginPath(); ctx.arc(CX,CY,R,0,Math.PI*2); ctx.stroke();
+
+  ctx.restore(); // fin de la translation pan
 }
 
 function globeLoop() {
