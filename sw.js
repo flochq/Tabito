@@ -1,12 +1,11 @@
 // Tabito Service Worker
-const CACHE_NAME = "tabito-v3";
+const CACHE_NAME = "tabito-v5";
 
-// Assets to cache on install (app shell)
 const PRECACHE = [
-  "/Tabito/tabito.html",
-  "/Tabito/manifest.json",
-  "/Tabito/icon-192.png",
-  "/Tabito/icon-512.png",
+  "./tabito.html",
+  "./manifest.json",
+  "./icon-192.png",
+  "./icon-512.png"
 ];
 
 // External CDN assets to cache on first use
