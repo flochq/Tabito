@@ -361,6 +361,16 @@
   .gacha-token { width:12px; height:12px; border-radius:50%; background:#2563eb; transition:all 0.3s; }
   .gacha-token.empty { background:#e2e8f0; }
 
+  /* Globe draw screen */
+  #draw-screen { touch-action: none; }
+  @keyframes star-twinkle {
+    0%,100% { opacity:0.3; } 50% { opacity:1; }
+  }
+  @keyframes spark-out {
+    0%   { transform:translate(-50%,-50%) translate(0,0); opacity:1; }
+    100% { transform:translate(-50%,-50%) translate(var(--dx),var(--dy)); opacity:0; }
+  }
+
   .leaflet-control-attribution { display: none; }
   .leaflet-control-zoom { display: none; }
 </style>
@@ -370,6 +380,17 @@
 <div id="map"></div>
 <div id="logo"><h1>Tabito</h1><p>explorez l'inconnu</p></div>
 
+<!-- Gacha buttons -->
+<div id="gacha-btns" style="position:absolute;top:70px;left:16px;z-index:1000;display:flex;flex-direction:column;gap:8px;">
+  <button id="btn-open-draw" onclick="openDrawScreen()" style="display:flex;align-items:center;gap:8px;padding:9px 16px;border-radius:20px;background:rgba(37,99,235,0.92);color:#fff;border:none;font-family:'Space Mono',monospace;font-size:0.65rem;letter-spacing:0.06em;cursor:pointer;box-shadow:0 2px 12px rgba(37,99,235,0.35);touch-action:manipulation;backdrop-filter:blur(8px);">
+    <span id="btn-draw-dot" style="display:none;width:7px;height:7px;border-radius:50%;background:#fbbf24;flex-shrink:0;"></span>
+    🎴 Tirages · <span id="btn-draws-count">0</span>
+  </button>
+  <button id="btn-open-collection" onclick="openCollectionScreen()" style="display:flex;align-items:center;gap:8px;padding:9px 16px;border-radius:20px;background:rgba(255,255,255,0.88);color:#1e293b;border:1px solid rgba(37,99,235,0.2);font-family:'Space Mono',monospace;font-size:0.65rem;letter-spacing:0.06em;cursor:pointer;backdrop-filter:blur(8px);touch-action:manipulation;">
+    🗃️ Collection · <span id="btn-collection-count">0</span>
+  </button>
+</div>
+
 <div id="gps-dot"></div>
 <div id="stats">
   <div class="stat-chip"><span class="stat-val" id="stat-photos">0</span><span class="stat-lbl">photos</span></div>
@@ -378,11 +399,7 @@
     <span class="stat-val" id="stat-coverage">0%</span>
     <span class="stat-lbl" id="city-name">ville</span>
   </div>
-  <div class="stat-chip" id="gacha-chip" style="cursor:pointer;position:relative;">
-    <span class="stat-val" id="stat-draws">0</span>
-    <span class="stat-lbl">tirages</span>
-    <span id="gacha-dot" style="display:none;position:absolute;top:-4px;right:-4px;width:9px;height:9px;border-radius:50%;background:#f59e0b;"></span>
-  </div>
+
 </div>
 
 <div id="loading"><h2>Tabito</h2><div class="spinner"></div><p>Chargement…</p></div>
@@ -479,38 +496,52 @@
   </div>
 </div>
 
-<!-- ── GACHA PANEL ─────────────────────────────────────────────── -->
-<div id="gacha-panel" style="position:absolute;inset:0;z-index:1150;background:rgba(248,250,252,0.98);display:none;flex-direction:column;backdrop-filter:blur(12px);">
-  <div style="display:flex;align-items:center;justify-content:space-between;padding:16px;border-bottom:1px solid rgba(0,0,0,0.07);">
-    <h2 style="font-family:'Syne',sans-serif;font-weight:800;font-size:1.1rem;color:#1e293b;">✨ Tirages</h2>
-    <button id="gacha-close" onclick="document.getElementById('gacha-panel').style.display='none'" style="background:none;border:none;font-size:1.2rem;cursor:pointer;color:#64748b;touch-action:manipulation;">✕</button>
+<!-- ── DRAW SCREEN (globe) ───────────────────────────────────────── -->
+<div id="draw-screen" style="position:fixed;inset:0;z-index:1150;background:#080d1f;display:none;flex-direction:column;align-items:center;justify-content:flex-start;overflow:hidden;">
+  <!-- Header -->
+  <div style="width:100%;display:flex;align-items:center;justify-content:space-between;padding:16px 20px;z-index:2;position:relative;">
+    <div style="font-family:'Syne',sans-serif;font-weight:800;font-size:1.05rem;color:#fff;">✨ Tirage</div>
+    <button onclick="closeDrawScreen()" style="background:none;border:none;color:rgba(255,255,255,0.6);font-size:1.3rem;cursor:pointer;touch-action:manipulation;padding:4px 8px;">✕</button>
   </div>
-  <!-- Tirages disponibles + bouton tirer -->
-  <div id="gacha-draw-section" style="padding:20px 16px;border-bottom:1px solid rgba(0,0,0,0.07);display:flex;flex-direction:column;align-items:center;gap:14px;">
-    <div style="display:flex;gap:6px;" id="gacha-tokens"></div>
-    <button id="gacha-draw-btn" onclick="gachaDraw()" style="padding:14px 36px;border-radius:30px;background:#2563eb;color:#fff;border:none;font-family:'Space Mono',monospace;font-size:0.85rem;letter-spacing:0.06em;cursor:pointer;box-shadow:0 4px 20px rgba(37,99,235,0.35);touch-action:manipulation;">
+  <!-- Globe canvas zone -->
+  <div id="globe-zone" style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:20px;position:relative;width:100%;">
+    <div id="globe-stars" style="position:absolute;inset:0;pointer-events:none;"></div>
+    <canvas id="globe-canvas" width="280" height="280" style="border-radius:50%;position:relative;z-index:1;"></canvas>
+    <div id="globe-status" style="font-family:'Space Mono',monospace;font-size:0.65rem;color:rgba(255,255,255,0.45);letter-spacing:0.1em;min-height:1.2em;z-index:1;"></div>
+  </div>
+  <!-- Tokens + Draw button -->
+  <div style="padding:20px;display:flex;flex-direction:column;align-items:center;gap:14px;width:100%;z-index:2;">
+    <div id="globe-tokens" style="display:flex;gap:7px;"></div>
+    <button id="globe-draw-btn" onclick="globeDraw()" style="width:100%;max-width:280px;padding:16px;border-radius:30px;background:#2563eb;color:#fff;border:none;font-family:'Space Mono',monospace;font-size:0.82rem;letter-spacing:0.06em;cursor:pointer;box-shadow:0 4px 24px rgba(37,99,235,0.5);touch-action:manipulation;">
       Tirer une carte 🎴
     </button>
-    <div id="gacha-next-info" style="font-family:'Space Mono',monospace;font-size:0.6rem;color:#94a3b8;text-align:center;"></div>
+    <div id="globe-next-info" style="font-family:'Space Mono',monospace;font-size:0.58rem;color:rgba(255,255,255,0.35);text-align:center;line-height:1.8;"></div>
   </div>
-  <!-- Reveal zone -->
-  <div id="gacha-reveal" style="display:none;flex-direction:column;align-items:center;justify-content:center;padding:24px 16px;gap:16px;">
-    <div id="gacha-card-reveal"></div>
-    <button id="gacha-reveal-close" style="padding:10px 28px;border-radius:20px;border:1.5px solid rgba(37,99,235,0.3);background:#fff;color:#2563eb;font-family:'Space Mono',monospace;font-size:0.72rem;cursor:pointer;">
-      Ajouter à la collection →
-    </button>
-  </div>
-  <!-- Collection -->
-  <div style="padding:12px 16px 6px;font-family:'Space Mono',monospace;font-size:0.62rem;color:#64748b;letter-spacing:0.1em;text-transform:uppercase;">Ma collection</div>
-  <div id="gacha-collection" style="flex:1;overflow-y:auto;padding:0 12px 16px;display:grid;grid-template-columns:repeat(3,1fr);gap:8px;"></div>
 </div>
 
-<!-- ── GACHA CARD REVEAL OVERLAY ──────────────────────────────── -->
+<!-- ── CARD REVEAL OVERLAY ────────────────────────────────────────── -->
+<div id="draw-overlay" style="position:fixed;inset:0;z-index:1200;background:rgba(0,0,0,0.0);display:none;flex-direction:column;align-items:center;justify-content:center;gap:20px;transition:background 0.4s;">
+  <div id="reveal-particles" style="position:absolute;inset:0;pointer-events:none;overflow:hidden;"></div>
+  <div id="reveal-card-wrap" style="transform:rotateY(90deg) scale(0.8);opacity:0;transition:transform 0.55s cubic-bezier(0.34,1.56,0.64,1),opacity 0.4s;position:relative;z-index:1;"></div>
+  <div id="reveal-label" style="font-family:'Space Mono',monospace;font-size:0.65rem;color:rgba(255,255,255,0);letter-spacing:0.12em;transition:color 0.4s 0.3s;text-align:center;"></div>
+  <button id="reveal-close-btn" onclick="closeReveal()" style="opacity:0;transition:opacity 0.4s 0.5s;padding:11px 32px;border-radius:20px;border:1px solid rgba(255,255,255,0.25);background:rgba(255,255,255,0.08);color:#fff;font-family:'Space Mono',monospace;font-size:0.7rem;cursor:pointer;touch-action:manipulation;">Fermer</button>
+</div>
+
+<!-- ── COLLECTION SCREEN ──────────────────────────────────────────── -->
+<div id="collection-screen" style="position:fixed;inset:0;z-index:1150;background:rgba(248,250,252,0.98);display:none;flex-direction:column;overflow:hidden;backdrop-filter:blur(12px);">
+  <div style="display:flex;align-items:center;justify-content:space-between;padding:16px;border-bottom:1px solid rgba(0,0,0,0.07);">
+    <h2 style="font-family:'Syne',sans-serif;font-weight:800;font-size:1.1rem;color:#1e293b;">🗃️ Ma Collection</h2>
+    <button onclick="closeCollectionScreen()" style="background:none;border:none;font-size:1.2rem;cursor:pointer;color:#64748b;touch-action:manipulation;">✕</button>
+  </div>
+  <div id="collection-content" style="flex:1;overflow-y:auto;padding:12px;display:grid;grid-template-columns:repeat(3,1fr);gap:8px;"></div>
+</div>
+
+<!-- ── CARD DETAIL OVERLAY ────────────────────────────────────────── -->
 <div id="gacha-overlay" style="position:fixed;inset:0;z-index:1250;background:rgba(0,0,0,0.75);display:none;align-items:center;justify-content:center;backdrop-filter:blur(4px);">
-  <div id="gacha-overlay-card" style="animation:card-flip 0.6s ease;display:flex;flex-direction:column;align-items:center;gap:16px;"></div>
+  <div id="gacha-overlay-card" style="display:flex;flex-direction:column;align-items:center;gap:16px;"></div>
 </div>
 
-
+<script>
 <script>
 const STORAGE_KEY  = "tabito-v2";
 const CIRCLE_STEPS = 48;
@@ -1473,369 +1504,87 @@ if (!("geolocation" in navigator)) {
 }
 
 
-// ── GACHA SYSTEM ──────────────────────────────────────────────────────
-
-// Villes françaises > 50 000 hab avec raretés
-// rarity: common=50k-150k, rare=150k-500k, epic=500k-2M, legendary=2M+
-const GACHA_CITIES = [
-  // LEGENDARY (Paris)
-  {name:"Paris",region:"Île-de-France",pop:2161000,emoji:"🗼",rarity:"legendary"},
-  // EPIC (500k-2M)
-  {name:"Marseille",region:"Provence-Alpes-Côte d'Azur",pop:870731,emoji:"⚓",rarity:"epic"},
-  {name:"Lyon",region:"Auvergne-Rhône-Alpes",pop:522228,emoji:"🦁",rarity:"epic"},
-  {name:"Toulouse",region:"Occitanie",pop:493465,emoji:"🌹",rarity:"epic"},
-  {name:"Nice",region:"Provence-Alpes-Côte d'Azur",pop:342522,emoji:"🌊",rarity:"rare"},
-  {name:"Nantes",region:"Pays de la Loire",pop:320732,emoji:"🐘",rarity:"rare"},
-  {name:"Strasbourg",region:"Grand Est",pop:284677,emoji:"🥨",rarity:"rare"},
-  {name:"Montpellier",region:"Occitanie",pop:290053,emoji:"🌿",rarity:"rare"},
-  {name:"Bordeaux",region:"Nouvelle-Aquitaine",pop:257804,emoji:"🍷",rarity:"rare"},
-  {name:"Lille",region:"Hauts-de-France",pop:236234,emoji:"🍺",rarity:"rare"},
-  {name:"Rennes",region:"Bretagne",pop:220488,emoji:"🦞",rarity:"rare"},
-  {name:"Reims",region:"Grand Est",pop:182592,emoji:"🥂",rarity:"rare"},
-  {name:"Saint-Étienne",region:"Auvergne-Rhône-Alpes",pop:171483,emoji:"⚽",rarity:"rare"},
-  {name:"Le Havre",region:"Normandie",pop:170147,emoji:"🚢",rarity:"rare"},
-  {name:"Toulon",region:"Provence-Alpes-Côte d'Azur",pop:167985,emoji:"⚓",rarity:"rare"},
-  {name:"Grenoble",region:"Auvergne-Rhône-Alpes",pop:158454,emoji:"🏔️",rarity:"rare"},
-  {name:"Dijon",region:"Bourgogne-Franche-Comté",pop:155090,emoji:"🍯",rarity:"rare"},
-  {name:"Angers",region:"Pays de la Loire",pop:154508,emoji:"🏰",rarity:"rare"},
-  {name:"Nîmes",region:"Occitanie",pop:151258,emoji:"🏛️",rarity:"rare"},
-  // COMMON (50k-150k)
-  {name:"Villeurbanne",region:"Auvergne-Rhône-Alpes",pop:149019,emoji:"🏙️",rarity:"common"},
-  {name:"Clermont-Ferrand",region:"Auvergne-Rhône-Alpes",pop:147865,emoji:"🌋",rarity:"common"},
-  {name:"Le Mans",region:"Pays de la Loire",pop:143599,emoji:"🏎️",rarity:"common"},
-  {name:"Aix-en-Provence",region:"Provence-Alpes-Côte d'Azur",pop:143097,emoji:"🎨",rarity:"common"},
-  {name:"Brest",region:"Bretagne",pop:141103,emoji:"⛵",rarity:"common"},
-  {name:"Tours",region:"Centre-Val de Loire",pop:136562,emoji:"🏰",rarity:"common"},
-  {name:"Amiens",region:"Hauts-de-France",pop:134057,emoji:"⛪",rarity:"common"},
-  {name:"Limoges",region:"Nouvelle-Aquitaine",pop:132175,emoji:"🏺",rarity:"common"},
-  {name:"Metz",region:"Grand Est",pop:117619,emoji:"🎭",rarity:"common"},
-  {name:"Besançon",region:"Bourgogne-Franche-Comté",pop:116952,emoji:"⌚",rarity:"common"},
-  {name:"Perpignan",region:"Occitanie",pop:121875,emoji:"🐂",rarity:"common"},
-  {name:"Boulogne-Billancourt",region:"Île-de-France",pop:120071,emoji:"🚗",rarity:"common"},
-  {name:"Orléans",region:"Centre-Val de Loire",pop:114644,emoji:"⚔️",rarity:"common"},
-  {name:"Rouen",region:"Normandie",pop:112321,emoji:"🔥",rarity:"common"},
-  {name:"Mulhouse",region:"Grand Est",pop:111430,emoji:"🚂",rarity:"common"},
-  {name:"Caen",region:"Normandie",pop:106277,emoji:"🏖️",rarity:"common"},
-  {name:"Avignon",region:"Provence-Alpes-Côte d'Azur",pop:93124,emoji:"🎭",rarity:"common"},
-  {name:"Poitiers",region:"Nouvelle-Aquitaine",pop:87959,emoji:"⚜️",rarity:"common"},
-  {name:"Pau",region:"Nouvelle-Aquitaine",pop:77386,emoji:"🏔️",rarity:"common"},
-  {name:"Dunkerque",region:"Hauts-de-France",pop:90000,emoji:"⛵",rarity:"common"},
-  {name:"Versailles",region:"Île-de-France",pop:85801,emoji:"👑",rarity:"common"},
-  {name:"Argenteuil",region:"Île-de-France",pop:110000,emoji:"🎨",rarity:"common"},
-  {name:"Montreuil",region:"Île-de-France",pop:109000,emoji:"🌳",rarity:"common"},
-  {name:"Nancy",region:"Grand Est",pop:104885,emoji:"🌺",rarity:"common"},
-  {name:"La Rochelle",region:"Nouvelle-Aquitaine",pop:77811,emoji:"🏰",rarity:"common"},
-  {name:"Antibes",region:"Provence-Alpes-Côte d'Azur",pop:73798,emoji:"⛵",rarity:"common"},
-  {name:"Vitry-sur-Seine",region:"Île-de-France",pop:94162,emoji:"🏭",rarity:"common"},
-  {name:"Colombes",region:"Île-de-France",pop:86000,emoji:"🏅",rarity:"common"},
-  {name:"Aulnay-sous-Bois",region:"Île-de-France",pop:83438,emoji:"🏙️",rarity:"common"},
-  {name:"Saint-Denis",region:"Île-de-France",pop:110282,emoji:"⚽",rarity:"common"},
-  {name:"Rueil-Malmaison",region:"Île-de-France",pop:84490,emoji:"🏡",rarity:"common"},
-  {name:"Champigny-sur-Marne",region:"Île-de-France",pop:77000,emoji:"🌊",rarity:"common"},
-  {name:"Calais",region:"Hauts-de-France",pop:72646,emoji:"⛴️",rarity:"common"},
-  {name:"Mérignac",region:"Nouvelle-Aquitaine",pop:68720,emoji:"✈️",rarity:"common"},
-  {name:"Roubaix",region:"Hauts-de-France",pop:95238,emoji:"🧶",rarity:"common"},
-  {name:"Tourcoing",region:"Hauts-de-France",pop:95948,emoji:"🏭",rarity:"common"},
-  {name:"Fort-de-France",region:"Martinique",pop:79423,emoji:"🌴",rarity:"common"},
-  {name:"Saint-Paul",region:"La Réunion",pop:108000,emoji:"🌋",rarity:"common"},
-  {name:"Nanterre",region:"Île-de-France",pop:93190,emoji:"🏗️",rarity:"common"},
-  {name:"Créteil",region:"Île-de-France",pop:91700,emoji:"🏙️",rarity:"common"},
-  {name:"Courbevoie",region:"Île-de-France",pop:86000,emoji:"🏙️",rarity:"common"},
-];
-
-// Probabilités de rareté
-const RARITY_WEIGHTS = { common: 65, rare: 25, epic: 8, legendary: 2 };
-const RARITY_LABELS  = { common:"Commun", rare:"Rare", epic:"Épique", legendary:"Légendaire" };
-const RARITY_STARS   = { common:"⚪", rare:"🔵", epic:"🟡", legendary:"🟣" };
-
-// Storage
-const GACHA_KEY = `${STORAGE_KEY}-gacha`;
-function loadGachaState() {
-  try { return JSON.parse(localStorage.getItem(GACHA_KEY) || "null") || { draws:0, lastDaily:null, kmAtLastDraw:0, collection:[] }; } catch { return { draws:0, lastDaily:null, kmAtLastDraw:0, collection:[] }; }
-}
-function saveGachaState(state) {
-  try { localStorage.setItem(GACHA_KEY, JSON.stringify(state)); } catch {}
-}
-
-const MAX_DRAWS = 20;
-const KM_PER_DRAW = 0.001;
-
-// Calcule combien de tirages sont disponibles
-function computeDraws(state) {
-  let draws = state.draws;
-  // Tirage quotidien
-  const today = new Date().toDateString();
-  if (state.lastDaily !== today) {
-    draws = Math.min(MAX_DRAWS, draws + 1);
-  }
-  // Tirages marche
-  const kmGained = totalDist - (state.kmAtLastDraw || 0);
-  const walkDraws = Math.floor(kmGained / KM_PER_DRAW);
-  draws = Math.min(MAX_DRAWS, draws + walkDraws);
-  return draws;
-}
-
-// Met à jour les tirages (appelé au démarrage et à chaque km)
-function refreshGachaDraws() {
-  const state = loadGachaState();
-  const today = new Date().toDateString();
-
-  let changed = false;
-  // Quotidien
-  if (state.lastDaily !== today) {
-    state.draws = Math.min(MAX_DRAWS, state.draws + 1);
-    state.lastDaily = today;
-    changed = true;
-  }
-  // Marche
-  const kmGained = totalDist - (state.kmAtLastDraw || 0);
-  const walkDraws = Math.floor(kmGained / KM_PER_DRAW);
-  if (walkDraws > 0) {
-    state.draws = Math.min(MAX_DRAWS, state.draws + walkDraws);
-    state.kmAtLastDraw = (state.kmAtLastDraw || 0) + walkDraws * KM_PER_DRAW;
-    changed = true;
-  }
-
-  if (changed) saveGachaState(state);
-  updateGachaChip(state.draws);
-  return state;
-}
-
-function updateGachaChip(draws) {
-  document.getElementById("stat-draws").textContent = draws;
-  const dot = document.getElementById("gacha-dot");
-  dot.style.display = draws > 0 ? "block" : "none";
-}
-
-// Tirage aléatoire selon poids
-function rollRarity() {
-  const total = Object.values(RARITY_WEIGHTS).reduce((a,b) => a+b, 0);
-  let r = Math.random() * total;
-  for (const [rarity, w] of Object.entries(RARITY_WEIGHTS)) {
-    r -= w;
-    if (r <= 0) return rarity;
-  }
-  return "common";
-}
-
-function drawCity(rarity) {
-  const pool = GACHA_CITIES.filter(c => c.rarity === rarity);
-  return pool[Math.floor(Math.random() * pool.length)];
-}
-
 
 // ── CITY VISUALS (silhouette + landmark SVG) ─────────────────────────
 const CITY_VISUALS = {
   "Paris": {
     sil: "M0,55 L8,52 L20,50 L35,49 L50,50 L65,49 L80,51 L92,52 L100,55 Z",
-    svg: (c) => `
-      <polygon points="44,50 47,12 53,12 56,50" fill="${c}" opacity="0.2"/>
-      <polygon points="46,50 48.5,20 51.5,20 54,50" fill="${c}" opacity="0.9"/>
-      <line x1="44" y1="40" x2="56" y2="40" stroke="${c}" stroke-width="2.5" opacity="0.9"/>
-      <line x1="45.5" y1="32" x2="54.5" y2="32" stroke="${c}" stroke-width="2" opacity="0.9"/>
-      <rect x="49.5" y="6" width="1.5" height="7" fill="${c}" opacity="0.9"/>
-    `
+    svg: (c) => `<polygon points="44,50 47,12 53,12 56,50" fill="${c}" opacity="0.2"/><polygon points="46,50 48.5,20 51.5,20 54,50" fill="${c}" opacity="0.9"/><line x1="44" y1="40" x2="56" y2="40" stroke="${c}" stroke-width="2.5" opacity="0.9"/><line x1="45.5" y1="32" x2="54.5" y2="32" stroke="${c}" stroke-width="2" opacity="0.9"/><rect x="49.5" y="6" width="1.5" height="7" fill="${c}" opacity="0.9"/>`
   },
   "Marseille": {
     sil: "M0,55 L5,50 L15,47 L28,46 L40,48 L52,46 L65,47 L78,49 L90,51 L100,55 Z",
-    svg: (c) => `
-      <ellipse cx="50" cy="46" rx="18" ry="7" fill="${c}" opacity="0.25"/>
-      <rect x="43" y="28" width="14" height="18" fill="${c}" opacity="0.85" rx="1"/>
-      <polygon points="43,28 50,14 57,28" fill="${c}" opacity="0.9"/>
-      <rect x="47" y="8" width="6" height="8" fill="${c}" opacity="0.9" rx="1"/>
-      <circle cx="50" cy="6" r="3" fill="${c}" opacity="0.95"/>
-      <rect x="49" y="3" width="2" height="4" fill="${c}"/>
-    `
+    svg: (c) => `<ellipse cx="50" cy="46" rx="18" ry="7" fill="${c}" opacity="0.25"/><rect x="43" y="28" width="14" height="18" fill="${c}" opacity="0.85" rx="1"/><polygon points="43,28 50,14 57,28" fill="${c}" opacity="0.9"/><rect x="47" y="8" width="6" height="8" fill="${c}" opacity="0.9" rx="1"/><circle cx="50" cy="6" r="3" fill="${c}" opacity="0.95"/><rect x="49" y="3" width="2" height="4" fill="${c}"/>`
   },
   "Lyon": {
     sil: "M0,55 L10,51 L22,49 L36,48 L50,49 L64,48 L78,50 L90,52 L100,55 Z",
-    svg: (c) => `
-      <rect x="30" y="30" width="40" height="20" fill="${c}" opacity="0.8" rx="1"/>
-      <polygon points="30,30 50,14 70,30" fill="${c}" opacity="0.85"/>
-      <rect x="34" y="22" width="8" height="10" fill="${c}" opacity="0.7" rx="1"/>
-      <rect x="58" y="22" width="8" height="10" fill="${c}" opacity="0.7" rx="1"/>
-      <rect x="46" y="6" width="8" height="14" fill="${c}" opacity="0.9" rx="1"/>
-      <polygon points="46,6 50,0 54,6" fill="${c}" opacity="0.95"/>
-    `
+    svg: (c) => `<rect x="30" y="30" width="40" height="20" fill="${c}" opacity="0.8" rx="1"/><polygon points="30,30 50,14 70,30" fill="${c}" opacity="0.85"/><rect x="34" y="22" width="8" height="10" fill="${c}" opacity="0.7" rx="1"/><rect x="58" y="22" width="8" height="10" fill="${c}" opacity="0.7" rx="1"/><rect x="46" y="6" width="8" height="14" fill="${c}" opacity="0.9" rx="1"/><polygon points="46,6 50,0 54,6" fill="${c}" opacity="0.95"/>`
   },
   "Toulouse": {
     sil: "M0,55 L8,52 L20,50 L34,49 L50,50 L66,49 L80,50 L92,52 L100,55 Z",
-    svg: (c) => `
-      <rect x="22" y="28" width="56" height="22" fill="${c}" opacity="0.8" rx="2"/>
-      <rect x="18" y="22" width="64" height="8" fill="${c}" opacity="0.85" rx="1"/>
-      <rect x="28" y="32" width="10" height="18" fill="${c}" opacity="0.6" rx="1"/>
-      <rect x="62" y="32" width="10" height="18" fill="${c}" opacity="0.6" rx="1"/>
-      <rect x="44" y="12" width="12" height="12" fill="${c}" opacity="0.9"/>
-      <polygon points="44,12 50,4 56,12" fill="${c}" opacity="0.95"/>
-    `
+    svg: (c) => `<rect x="22" y="28" width="56" height="22" fill="${c}" opacity="0.8" rx="2"/><rect x="18" y="22" width="64" height="8" fill="${c}" opacity="0.85" rx="1"/><rect x="28" y="32" width="10" height="18" fill="${c}" opacity="0.6" rx="1"/><rect x="62" y="32" width="10" height="18" fill="${c}" opacity="0.6" rx="1"/><rect x="44" y="12" width="12" height="12" fill="${c}" opacity="0.9"/><polygon points="44,12 50,4 56,12" fill="${c}" opacity="0.95"/>`
   },
   "Nice": {
     sil: "M0,55 L6,51 L18,48 L32,46 L48,47 L62,46 L76,48 L88,51 L100,55 Z",
-    svg: (c) => `
-      <rect x="5" y="42" width="90" height="5" fill="${c}" opacity="0.6" rx="2"/>
-      <rect x="10" y="38" width="80" height="5" fill="${c}" opacity="0.25" rx="2"/>
-      <rect x="48" y="10" width="4" height="34" fill="${c}" opacity="0.85"/>
-      <ellipse cx="46" cy="10" rx="10" ry="7" fill="${c}" opacity="0.7" transform="rotate(-20,46,10)"/>
-      <ellipse cx="54" cy="8" rx="10" ry="7" fill="${c}" opacity="0.7" transform="rotate(20,54,8)"/>
-    `
+    svg: (c) => `<rect x="5" y="42" width="90" height="5" fill="${c}" opacity="0.6" rx="2"/><rect x="48" y="10" width="4" height="34" fill="${c}" opacity="0.85"/><ellipse cx="46" cy="10" rx="10" ry="7" fill="${c}" opacity="0.7" transform="rotate(-20,46,10)"/><ellipse cx="54" cy="8" rx="10" ry="7" fill="${c}" opacity="0.7" transform="rotate(20,54,8)"/>`
   },
   "Nantes": {
     sil: "M0,55 L8,52 L20,50 L34,48 L50,49 L66,48 L80,50 L92,52 L100,55 Z",
-    svg: (c) => `
-      <rect x="20" y="26" width="60" height="24" fill="${c}" opacity="0.75" rx="1"/>
-      <rect x="16" y="18" width="14" height="36" fill="${c}" opacity="0.9" rx="1"/>
-      <rect x="70" y="18" width="14" height="36" fill="${c}" opacity="0.9" rx="1"/>
-      <rect x="16" y="14" width="5" height="6" fill="${c}"/>
-      <rect x="22" y="14" width="5" height="6" fill="${c}"/>
-      <rect x="70" y="14" width="5" height="6" fill="${c}"/>
-      <rect x="76" y="14" width="5" height="6" fill="${c}"/>
-      <rect x="36" y="16" width="8" height="12" fill="${c}" opacity="0.9" rx="1"/>
-      <rect x="56" y="16" width="8" height="12" fill="${c}" opacity="0.9" rx="1"/>
-    `
+    svg: (c) => `<rect x="20" y="26" width="60" height="24" fill="${c}" opacity="0.75" rx="1"/><rect x="16" y="18" width="14" height="36" fill="${c}" opacity="0.9" rx="1"/><rect x="70" y="18" width="14" height="36" fill="${c}" opacity="0.9" rx="1"/><rect x="16" y="14" width="5" height="6" fill="${c}"/><rect x="22" y="14" width="5" height="6" fill="${c}"/><rect x="70" y="14" width="5" height="6" fill="${c}"/><rect x="76" y="14" width="5" height="6" fill="${c}"/>`
   },
   "Strasbourg": {
     sil: "M0,55 L10,52 L24,50 L38,49 L50,50 L62,49 L76,50 L88,52 L100,55 Z",
-    svg: (c) => `
-      <rect x="32" y="32" width="36" height="20" fill="${c}" opacity="0.8" rx="1"/>
-      <rect x="28" y="26" width="44" height="8" fill="${c}" opacity="0.85" rx="1"/>
-      <rect x="36" y="12" width="12" height="16" fill="${c}" opacity="0.85"/>
-      <rect x="52" y="12" width="12" height="16" fill="${c}" opacity="0.85"/>
-      <polygon points="36,12 42,2 48,12" fill="${c}" opacity="0.95"/>
-      <rect x="49" y="2" width="4" height="12" fill="${c}" opacity="0.9"/>
-    `
+    svg: (c) => `<rect x="32" y="32" width="36" height="20" fill="${c}" opacity="0.8" rx="1"/><rect x="28" y="26" width="44" height="8" fill="${c}" opacity="0.85" rx="1"/><rect x="36" y="12" width="12" height="16" fill="${c}" opacity="0.85"/><rect x="52" y="12" width="12" height="16" fill="${c}" opacity="0.85"/><polygon points="36,12 42,2 48,12" fill="${c}" opacity="0.95"/><rect x="49" y="2" width="4" height="12" fill="${c}" opacity="0.9"/>`
   },
   "Montpellier": {
     sil: "M0,55 L8,52 L22,50 L36,49 L50,50 L64,49 L78,50 L92,52 L100,55 Z",
-    svg: (c) => `
-      <rect x="15" y="14" width="20" height="36" fill="${c}" opacity="0.85" rx="1"/>
-      <rect x="65" y="14" width="20" height="36" fill="${c}" opacity="0.85" rx="1"/>
-      <rect x="15" y="10" width="70" height="6" fill="${c}" opacity="0.9"/>
-      <path d="M35,14 Q50,4 65,14" fill="${c}" opacity="0.8"/>
-      <rect x="10" y="48" width="80" height="4" fill="${c}" opacity="0.7"/>
-    `
+    svg: (c) => `<rect x="15" y="14" width="20" height="36" fill="${c}" opacity="0.85" rx="1"/><rect x="65" y="14" width="20" height="36" fill="${c}" opacity="0.85" rx="1"/><rect x="15" y="10" width="70" height="6" fill="${c}" opacity="0.9"/><path d="M35,14 Q50,4 65,14" fill="${c}" opacity="0.8"/><rect x="10" y="48" width="80" height="4" fill="${c}" opacity="0.7"/>`
   },
   "Bordeaux": {
     sil: "M0,55 L8,52 L20,50 L34,48 L50,49 L66,48 L80,50 L92,52 L100,55 Z",
-    svg: (c) => `
-      <rect x="20" y="24" width="60" height="26" fill="${c}" opacity="0.8" rx="1"/>
-      <rect x="16" y="18" width="68" height="8" fill="${c}" opacity="0.85" rx="1"/>
-      <rect x="26" y="10" width="6" height="10" fill="${c}" opacity="0.9"/>
-      <rect x="36" y="10" width="6" height="10" fill="${c}" opacity="0.9"/>
-      <rect x="52" y="10" width="6" height="10" fill="${c}" opacity="0.9"/>
-      <rect x="62" y="10" width="6" height="10" fill="${c}" opacity="0.9"/>
-      <rect x="14" y="48" width="72" height="4" fill="${c}" opacity="0.6"/>
-    `
+    svg: (c) => `<rect x="20" y="24" width="60" height="26" fill="${c}" opacity="0.8" rx="1"/><rect x="16" y="18" width="68" height="8" fill="${c}" opacity="0.85" rx="1"/><rect x="26" y="10" width="6" height="10" fill="${c}" opacity="0.9"/><rect x="36" y="10" width="6" height="10" fill="${c}" opacity="0.9"/><rect x="52" y="10" width="6" height="10" fill="${c}" opacity="0.9"/><rect x="62" y="10" width="6" height="10" fill="${c}" opacity="0.9"/>`
   },
   "Lille": {
     sil: "M0,55 L10,52 L24,50 L38,49 L52,50 L66,49 L80,51 L90,52 L100,55 Z",
-    svg: (c) => `
-      <rect x="38" y="30" width="24" height="22" fill="${c}" opacity="0.8" rx="1"/>
-      <rect x="34" y="24" width="32" height="8" fill="${c}" opacity="0.85"/>
-      <rect x="40" y="12" width="20" height="14" fill="${c}" opacity="0.85" rx="1"/>
-      <rect x="44" y="4" width="12" height="10" fill="${c}" opacity="0.9" rx="1"/>
-      <polygon points="44,4 50,0 56,4" fill="${c}" opacity="0.95"/>
-    `
+    svg: (c) => `<rect x="38" y="30" width="24" height="22" fill="${c}" opacity="0.8" rx="1"/><rect x="34" y="24" width="32" height="8" fill="${c}" opacity="0.85"/><rect x="40" y="12" width="20" height="14" fill="${c}" opacity="0.85" rx="1"/><rect x="44" y="4" width="12" height="10" fill="${c}" opacity="0.9" rx="1"/><polygon points="44,4 50,0 56,4" fill="${c}" opacity="0.95"/>`
   },
   "Rennes": {
     sil: "M0,55 L10,52 L24,50 L38,49 L50,50 L62,49 L76,51 L88,52 L100,55 Z",
-    svg: (c) => `
-      <rect x="18" y="26" width="64" height="24" fill="${c}" opacity="0.8" rx="2"/>
-      <rect x="14" y="20" width="72" height="8" fill="${c}" opacity="0.85" rx="1"/>
-      <polygon points="14,20 50,6 86,20" fill="${c}" opacity="0.9"/>
-      <rect x="24" y="32" width="10" height="18" fill="${c}" opacity="0.55" rx="1"/>
-      <rect x="66" y="32" width="10" height="18" fill="${c}" opacity="0.55" rx="1"/>
-    `
+    svg: (c) => `<rect x="18" y="26" width="64" height="24" fill="${c}" opacity="0.8" rx="2"/><rect x="14" y="20" width="72" height="8" fill="${c}" opacity="0.85" rx="1"/><polygon points="14,20 50,6 86,20" fill="${c}" opacity="0.9"/><rect x="24" y="32" width="10" height="18" fill="${c}" opacity="0.55" rx="1"/><rect x="66" y="32" width="10" height="18" fill="${c}" opacity="0.55" rx="1"/>`
   },
   "Grenoble": {
     sil: "M0,55 L5,45 L18,38 L30,42 L42,36 L50,40 L58,34 L70,40 L82,44 L92,50 L100,55 Z",
-    svg: (c) => `
-      <polygon points="0,55 22,22 40,46" fill="${c}" opacity="0.3"/>
-      <polygon points="38,46 60,16 82,46" fill="${c}" opacity="0.4"/>
-      <polygon points="70,46 85,28 100,46" fill="${c}" opacity="0.3"/>
-      <rect x="54" y="20" width="14" height="10" fill="${c}" opacity="0.9" rx="1"/>
-      <rect x="52" y="17" width="5" height="5" fill="${c}" opacity="0.9"/>
-      <rect x="61" y="17" width="5" height="5" fill="${c}" opacity="0.9"/>
-    `
+    svg: (c) => `<polygon points="0,55 22,22 40,46" fill="${c}" opacity="0.3"/><polygon points="38,46 60,16 82,46" fill="${c}" opacity="0.4"/><rect x="54" y="20" width="14" height="10" fill="${c}" opacity="0.9" rx="1"/><rect x="52" y="17" width="5" height="5" fill="${c}" opacity="0.9"/><rect x="61" y="17" width="5" height="5" fill="${c}" opacity="0.9"/>`
   },
   "Reims": {
     sil: "M0,55 L10,52 L24,50 L38,49 L50,50 L62,49 L76,51 L88,52 L100,55 Z",
-    svg: (c) => `
-      <rect x="32" y="34" width="36" height="18" fill="${c}" opacity="0.8" rx="1"/>
-      <rect x="28" y="28" width="44" height="8" fill="${c}" opacity="0.85" rx="1"/>
-      <rect x="32" y="14" width="14" height="16" fill="${c}" opacity="0.85"/>
-      <rect x="54" y="14" width="14" height="16" fill="${c}" opacity="0.85"/>
-      <polygon points="32,14 39,2 46,14" fill="${c}" opacity="0.95"/>
-      <polygon points="54,14 61,2 68,14" fill="${c}" opacity="0.95"/>
-    `
+    svg: (c) => `<rect x="32" y="34" width="36" height="18" fill="${c}" opacity="0.8" rx="1"/><rect x="28" y="28" width="44" height="8" fill="${c}" opacity="0.85" rx="1"/><rect x="32" y="14" width="14" height="16" fill="${c}" opacity="0.85"/><rect x="54" y="14" width="14" height="16" fill="${c}" opacity="0.85"/><polygon points="32,14 39,2 46,14" fill="${c}" opacity="0.95"/><polygon points="54,14 61,2 68,14" fill="${c}" opacity="0.95"/>`
   },
   "Avignon": {
     sil: "M0,55 L8,52 L20,50 L34,49 L50,50 L66,49 L80,51 L92,52 L100,55 Z",
-    svg: (c) => `
-      <rect x="18" y="22" width="64" height="30" fill="${c}" opacity="0.78" rx="1"/>
-      <rect x="14" y="14" width="14" height="40" fill="${c}" opacity="0.9" rx="1"/>
-      <rect x="72" y="14" width="14" height="40" fill="${c}" opacity="0.9" rx="1"/>
-      <rect x="34" y="12" width="10" height="14" fill="${c}" opacity="0.9" rx="1"/>
-      <rect x="56" y="12" width="10" height="14" fill="${c}" opacity="0.9" rx="1"/>
-      <rect x="14" y="11" width="5" height="5" fill="${c}"/>
-      <rect x="20" y="11" width="5" height="5" fill="${c}"/>
-      <rect x="72" y="11" width="5" height="5" fill="${c}"/>
-      <rect x="78" y="11" width="5" height="5" fill="${c}"/>
-    `
+    svg: (c) => `<rect x="18" y="22" width="64" height="30" fill="${c}" opacity="0.78" rx="1"/><rect x="14" y="14" width="14" height="40" fill="${c}" opacity="0.9" rx="1"/><rect x="72" y="14" width="14" height="40" fill="${c}" opacity="0.9" rx="1"/><rect x="14" y="11" width="5" height="5" fill="${c}"/><rect x="20" y="11" width="5" height="5" fill="${c}"/><rect x="72" y="11" width="5" height="5" fill="${c}"/><rect x="78" y="11" width="5" height="5" fill="${c}"/>`
   },
   "Versailles": {
     sil: "M0,55 L8,52 L20,50 L34,49 L50,50 L66,49 L80,51 L92,52 L100,55 Z",
-    svg: (c) => `
-      <rect x="8" y="28" width="84" height="20" fill="${c}" opacity="0.78" rx="1"/>
-      <rect x="4" y="22" width="92" height="8" fill="${c}" opacity="0.85" rx="1"/>
-      <rect x="8" y="14" width="16" height="14" fill="${c}" opacity="0.9" rx="1"/>
-      <rect x="76" y="14" width="16" height="14" fill="${c}" opacity="0.9" rx="1"/>
-      <polygon points="8,14 16,6 24,14" fill="${c}" opacity="0.95"/>
-      <polygon points="76,14 84,6 92,14" fill="${c}" opacity="0.95"/>
-    `
+    svg: (c) => `<rect x="8" y="28" width="84" height="20" fill="${c}" opacity="0.78" rx="1"/><rect x="4" y="22" width="92" height="8" fill="${c}" opacity="0.85" rx="1"/><rect x="8" y="14" width="16" height="14" fill="${c}" opacity="0.9" rx="1"/><rect x="76" y="14" width="16" height="14" fill="${c}" opacity="0.9" rx="1"/><polygon points="8,14 16,6 24,14" fill="${c}" opacity="0.95"/><polygon points="76,14 84,6 92,14" fill="${c}" opacity="0.95"/>`
   },
   "Caen": {
     sil: "M0,55 L8,52 L20,50 L34,49 L50,50 L66,49 L80,51 L92,52 L100,55 Z",
-    svg: (c) => `
-      <rect x="20" y="24" width="60" height="28" fill="${c}" opacity="0.75" rx="1"/>
-      <rect x="16" y="16" width="14" height="40" fill="${c}" opacity="0.9" rx="1"/>
-      <rect x="70" y="16" width="14" height="40" fill="${c}" opacity="0.9" rx="1"/>
-      <rect x="16" y="12" width="5" height="6" fill="${c}"/>
-      <rect x="22" y="12" width="5" height="6" fill="${c}"/>
-      <rect x="70" y="12" width="5" height="6" fill="${c}"/>
-      <rect x="76" y="12" width="5" height="6" fill="${c}"/>
-    `
+    svg: (c) => `<rect x="20" y="24" width="60" height="28" fill="${c}" opacity="0.75" rx="1"/><rect x="16" y="16" width="14" height="40" fill="${c}" opacity="0.9" rx="1"/><rect x="70" y="16" width="14" height="40" fill="${c}" opacity="0.9" rx="1"/><rect x="16" y="12" width="5" height="6" fill="${c}"/><rect x="22" y="12" width="5" height="6" fill="${c}"/><rect x="70" y="12" width="5" height="6" fill="${c}"/><rect x="76" y="12" width="5" height="6" fill="${c}"/>`
   },
   "Brest": {
     sil: "M0,55 L5,50 L15,46 L28,44 L42,46 L56,44 L70,46 L84,50 L94,53 L100,55 Z",
-    svg: (c) => `
-      <rect x="20" y="24" width="40" height="28" fill="${c}" opacity="0.75" rx="1"/>
-      <rect x="16" y="16" width="12" height="38" fill="${c}" opacity="0.9" rx="1"/>
-      <rect x="52" y="16" width="12" height="38" fill="${c}" opacity="0.9" rx="1"/>
-      <rect x="68" y="10" width="8" height="38" fill="${c}" opacity="0.85" rx="1"/>
-      <polygon points="66,10 72,2 78,10" fill="${c}" opacity="0.95"/>
-      <ellipse cx="72" cy="12" rx="8" ry="3" fill="${c}" opacity="0.45"/>
-    `
+    svg: (c) => `<rect x="20" y="24" width="40" height="28" fill="${c}" opacity="0.75" rx="1"/><rect x="16" y="16" width="12" height="38" fill="${c}" opacity="0.9" rx="1"/><rect x="52" y="16" width="12" height="38" fill="${c}" opacity="0.9" rx="1"/><rect x="68" y="10" width="8" height="38" fill="${c}" opacity="0.85" rx="1"/><polygon points="66,10 72,2 78,10" fill="${c}" opacity="0.95"/>`
   },
   "Dijon": {
     sil: "M0,55 L10,52 L24,50 L38,49 L50,50 L62,49 L76,51 L88,52 L100,55 Z",
-    svg: (c) => `
-      <rect x="18" y="26" width="64" height="26" fill="${c}" opacity="0.8" rx="1"/>
-      <rect x="12" y="16" width="14" height="40" fill="${c}" opacity="0.9" rx="1"/>
-      <rect x="74" y="16" width="14" height="40" fill="${c}" opacity="0.9" rx="1"/>
-      <polygon points="12,16 19,4 26,16" fill="${c}" opacity="0.95"/>
-      <polygon points="74,16 81,4 88,16" fill="${c}" opacity="0.95"/>
-    `
+    svg: (c) => `<rect x="18" y="26" width="64" height="26" fill="${c}" opacity="0.8" rx="1"/><rect x="12" y="16" width="14" height="40" fill="${c}" opacity="0.9" rx="1"/><rect x="74" y="16" width="14" height="40" fill="${c}" opacity="0.9" rx="1"/><polygon points="12,16 19,4 26,16" fill="${c}" opacity="0.95"/><polygon points="74,16 81,4 88,16" fill="${c}" opacity="0.95"/>`
   },
 };
 
 function getCityVisual(name) {
   return CITY_VISUALS[name] || {
     sil: "M0,55 L10,52 L25,50 L40,49 L50,50 L60,49 L75,50 L90,52 L100,55 Z",
-    svg: (c) => `
-      <rect x="32" y="24" width="36" height="28" fill="${c}" opacity="0.8" rx="2"/>
-      <polygon points="32,24 50,10 68,24" fill="${c}" opacity="0.9"/>
-      <rect x="43" y="34" width="14" height="18" fill="${c}" opacity="0.55" rx="1"/>
-    `
+    svg: (c) => `<rect x="32" y="24" width="36" height="28" fill="${c}" opacity="0.8" rx="2"/><polygon points="32,24 50,10 68,24" fill="${c}" opacity="0.9"/><rect x="43" y="34" width="14" height="18" fill="${c}" opacity="0.55" rx="1"/>`
   };
 }
 
@@ -1848,21 +1597,19 @@ const RARITY_COLORS = {
 
 function buildCard(city, large = true) {
   const popStr = city.pop >= 1000000
-    ? (city.pop / 1000000).toFixed(1) + "M hab."
-    : Math.round(city.pop / 1000) + "k hab.";
+    ? (city.pop/1000000).toFixed(1)+"M hab."
+    : Math.round(city.pop/1000)+"k hab.";
   const visual = getCityVisual(city.name);
   const rc = RARITY_COLORS[city.rarity] || RARITY_COLORS.common;
-  const c = rc.accent; // couleur landmark
+  const c = rc.accent;
 
   if (!large) {
     const svgContent = visual.svg(c);
-    return `<div class="gacha-mini ${city.rarity}" title="${city.name} · ${city.region}" style="position:relative;overflow:hidden;">
+    return `<div class="gacha-mini ${city.rarity}" title="${city.name}" style="position:relative;overflow:hidden;">
       <svg viewBox="0 0 100 55" style="position:absolute;bottom:0;left:0;width:100%;height:55%;opacity:0.15;" xmlns="http://www.w3.org/2000/svg">
         <path d="${visual.sil}" fill="${c}"/>
       </svg>
-      <svg viewBox="0 0 100 55" style="width:52px;height:30px;display:block;margin:0 auto;" xmlns="http://www.w3.org/2000/svg">
-        ${svgContent}
-      </svg>
+      <svg viewBox="0 0 100 55" style="width:52px;height:30px;display:block;margin:0 auto;" xmlns="http://www.w3.org/2000/svg">${svgContent}</svg>
       <div class="gacha-mini-name">${city.name}</div>
     </div>`;
   }
@@ -1871,179 +1618,517 @@ function buildCard(city, large = true) {
   return `<div class="gacha-card ${city.rarity}">
     <span class="gacha-card-badge">${RARITY_STARS[city.rarity]} ${RARITY_LABELS[city.rarity]}</span>
     <div style="position:relative;width:100%;height:120px;overflow:hidden;border-radius:10px;margin-bottom:10px;background:${rc.card};display:flex;align-items:flex-end;justify-content:center;">
-      <!-- Silhouette de sol -->
-      <svg viewBox="0 0 100 55" preserveAspectRatio="xMidYMax slice"
-        style="position:absolute;bottom:0;left:0;width:100%;height:100%;opacity:0.2;"
-        xmlns="http://www.w3.org/2000/svg">
+      <svg viewBox="0 0 100 55" preserveAspectRatio="xMidYMax slice" style="position:absolute;bottom:0;left:0;width:100%;height:100%;opacity:0.2;" xmlns="http://www.w3.org/2000/svg">
         <path d="${visual.sil}" fill="${c}"/>
       </svg>
-      <!-- Landmark centré -->
-      <svg viewBox="0 0 100 55" style="width:180px;height:98px;position:relative;z-index:1;flex-shrink:0;" xmlns="http://www.w3.org/2000/svg">
-        ${svgContent}
-      </svg>
+      <svg viewBox="0 0 100 55" style="width:180px;height:98px;position:relative;z-index:1;" xmlns="http://www.w3.org/2000/svg">${svgContent}</svg>
     </div>
     <div class="gacha-card-name">${city.name}</div>
     <div class="gacha-card-region">${city.region}</div>
     <div style="border-top:1px solid rgba(0,0,0,0.1);margin-top:10px;padding-top:8px;display:flex;justify-content:space-between;align-items:center;">
-      <div class="gacha-card-stat" style="display:block;">
-        <span style="font-size:1rem;">${city.emoji}</span>
-        <span style="margin-left:4px;">${popStr}</span>
-      </div>
+      <div class="gacha-card-stat" style="display:block;"><span style="font-size:1rem;">${city.emoji}</span><span style="margin-left:4px;">${popStr}</span></div>
       <div style="font-size:0.5rem;font-family:'Space Mono',monospace;opacity:0.4;letter-spacing:0.12em;">TABITO</div>
     </div>
   </div>`;
 }
 
-// Construit les tokens (points bleus)
-function renderTokens(draws) {
-  const el = document.getElementById("gacha-tokens");
-  el.innerHTML = Array.from({length: MAX_DRAWS}, (_, i) =>
-    `<div class="gacha-token${i < draws ? "" : " empty"}"></div>`
-  ).join("");
+// ── GACHA SYSTEM ──────────────────────────────────────────────────────
+
+// Cities data (lat/lon added for globe)
+const GACHA_CITIES = [
+  {name:"Paris",region:"Île-de-France",pop:2161000,emoji:"🗼",rarity:"legendary",lat:48.85,lon:2.35},
+  {name:"Marseille",region:"Provence-Alpes-Côte d'Azur",pop:870731,emoji:"⚓",rarity:"epic",lat:43.30,lon:5.37},
+  {name:"Lyon",region:"Auvergne-Rhône-Alpes",pop:522228,emoji:"🦁",rarity:"epic",lat:45.75,lon:4.85},
+  {name:"Toulouse",region:"Occitanie",pop:493465,emoji:"🌹",rarity:"epic",lat:43.60,lon:1.44},
+  {name:"Nice",region:"Provence-Alpes-Côte d'Azur",pop:342522,emoji:"🌊",rarity:"rare",lat:43.71,lon:7.26},
+  {name:"Nantes",region:"Pays de la Loire",pop:320732,emoji:"🐘",rarity:"rare",lat:47.22,lon:-1.55},
+  {name:"Strasbourg",region:"Grand Est",pop:284677,emoji:"🥨",rarity:"rare",lat:48.58,lon:7.75},
+  {name:"Montpellier",region:"Occitanie",pop:290053,emoji:"🌿",rarity:"rare",lat:43.61,lon:3.88},
+  {name:"Bordeaux",region:"Nouvelle-Aquitaine",pop:257804,emoji:"🍷",rarity:"rare",lat:44.84,lon:-0.58},
+  {name:"Lille",region:"Hauts-de-France",pop:236234,emoji:"🍺",rarity:"rare",lat:50.63,lon:3.06},
+  {name:"Rennes",region:"Bretagne",pop:220488,emoji:"🦞",rarity:"rare",lat:48.11,lon:-1.68},
+  {name:"Reims",region:"Grand Est",pop:182592,emoji:"🥂",rarity:"rare",lat:49.25,lon:4.03},
+  {name:"Saint-Étienne",region:"Auvergne-Rhône-Alpes",pop:171483,emoji:"⚽",rarity:"rare",lat:45.43,lon:4.39},
+  {name:"Le Havre",region:"Normandie",pop:170147,emoji:"🚢",rarity:"rare",lat:49.49,lon:0.11},
+  {name:"Toulon",region:"Provence-Alpes-Côte d'Azur",pop:167985,emoji:"⚓",rarity:"rare",lat:43.12,lon:5.93},
+  {name:"Grenoble",region:"Auvergne-Rhône-Alpes",pop:158454,emoji:"🏔️",rarity:"rare",lat:45.19,lon:5.72},
+  {name:"Dijon",region:"Bourgogne-Franche-Comté",pop:155090,emoji:"🍯",rarity:"rare",lat:47.32,lon:5.04},
+  {name:"Angers",region:"Pays de la Loire",pop:154508,emoji:"🏰",rarity:"rare",lat:47.47,lon:-0.55},
+  {name:"Nîmes",region:"Occitanie",pop:151258,emoji:"🏛️",rarity:"rare",lat:43.84,lon:4.36},
+  {name:"Villeurbanne",region:"Auvergne-Rhône-Alpes",pop:149019,emoji:"🏙️",rarity:"common",lat:45.77,lon:4.89},
+  {name:"Clermont-Ferrand",region:"Auvergne-Rhône-Alpes",pop:147865,emoji:"🌋",rarity:"common",lat:45.78,lon:3.08},
+  {name:"Le Mans",region:"Pays de la Loire",pop:143599,emoji:"🏎️",rarity:"common",lat:48.00,lon:0.20},
+  {name:"Aix-en-Provence",region:"Provence-Alpes-Côte d'Azur",pop:143097,emoji:"🎨",rarity:"common",lat:43.53,lon:5.45},
+  {name:"Brest",region:"Bretagne",pop:141103,emoji:"⛵",rarity:"common",lat:48.39,lon:-4.49},
+  {name:"Tours",region:"Centre-Val de Loire",pop:136562,emoji:"🏰",rarity:"common",lat:47.39,lon:0.69},
+  {name:"Amiens",region:"Hauts-de-France",pop:134057,emoji:"⛪",rarity:"common",lat:49.89,lon:2.30},
+  {name:"Limoges",region:"Nouvelle-Aquitaine",pop:132175,emoji:"🏺",rarity:"common",lat:45.83,lon:1.26},
+  {name:"Metz",region:"Grand Est",pop:117619,emoji:"🎭",rarity:"common",lat:49.12,lon:6.17},
+  {name:"Besançon",region:"Bourgogne-Franche-Comté",pop:116952,emoji:"⌚",rarity:"common",lat:47.24,lon:6.02},
+  {name:"Perpignan",region:"Occitanie",pop:121875,emoji:"🐂",rarity:"common",lat:42.70,lon:2.90},
+  {name:"Orléans",region:"Centre-Val de Loire",pop:114644,emoji:"⚔️",rarity:"common",lat:47.90,lon:1.90},
+  {name:"Rouen",region:"Normandie",pop:112321,emoji:"🔥",rarity:"common",lat:49.44,lon:1.09},
+  {name:"Mulhouse",region:"Grand Est",pop:111430,emoji:"🚂",rarity:"common",lat:47.75,lon:7.34},
+  {name:"Caen",region:"Normandie",pop:106277,emoji:"🏖️",rarity:"common",lat:49.18,lon:-0.37},
+  {name:"Avignon",region:"Provence-Alpes-Côte d'Azur",pop:93124,emoji:"🎭",rarity:"common",lat:43.95,lon:4.81},
+  {name:"Poitiers",region:"Nouvelle-Aquitaine",pop:87959,emoji:"⚜️",rarity:"common",lat:46.58,lon:0.34},
+  {name:"Pau",region:"Nouvelle-Aquitaine",pop:77386,emoji:"🏔️",rarity:"common",lat:43.30,lon:-0.37},
+  {name:"Versailles",region:"Île-de-France",pop:85801,emoji:"👑",rarity:"common",lat:48.80,lon:2.13},
+  {name:"Nancy",region:"Grand Est",pop:104885,emoji:"🌺",rarity:"common",lat:48.69,lon:6.18},
+  {name:"La Rochelle",region:"Nouvelle-Aquitaine",pop:77811,emoji:"🏰",rarity:"common",lat:46.16,lon:-1.15},
+  {name:"Roubaix",region:"Hauts-de-France",pop:95238,emoji:"🧶",rarity:"common",lat:50.69,lon:3.18},
+  {name:"Calais",region:"Hauts-de-France",pop:72646,emoji:"⛴️",rarity:"common",lat:50.95,lon:1.86},
+];
+
+const RARITY_WEIGHTS = { common:65, rare:25, epic:8, legendary:2 };
+const RARITY_LABELS  = { common:"Commun", rare:"Rare", epic:"Épique", legendary:"Légendaire" };
+const RARITY_STARS   = { common:"⚪", rare:"🔵", epic:"🟡", legendary:"🟣" };
+const GACHA_KEY = `${STORAGE_KEY}-gacha`;
+const MAX_DRAWS = 5;
+const KM_PER_DRAW = 5;
+
+function loadGachaState() {
+  try { return JSON.parse(localStorage.getItem(GACHA_KEY) || "null") || {draws:0,lastDaily:null,kmAtLastDraw:0,collection:[]}; }
+  catch { return {draws:0,lastDaily:null,kmAtLastDraw:0,collection:[]}; }
+}
+function saveGachaState(state) {
+  try { localStorage.setItem(GACHA_KEY, JSON.stringify(state)); } catch {}
 }
 
-// Info prochain tirage
-function renderNextInfo(state) {
-  const el = document.getElementById("gacha-next-info");
-  const today = new Date().toDateString();
-  const hasDaily = state.lastDaily !== today;
-  const kmLeft = KM_PER_DRAW - ((totalDist - (state.kmAtLastDraw||0)) % KM_PER_DRAW);
-  const parts = [];
-  if (hasDaily) parts.push("🌅 Tirage quotidien disponible !");
-  else parts.push(`🌅 Prochain quotidien demain`);
-  parts.push(`🚶 +1 tirage dans ${kmLeft.toFixed(1)} km`);
-  el.innerHTML = parts.join("<br>");
-}
-
-// Render collection
-function renderGachaCollection() {
+function refreshGachaDraws() {
   const state = loadGachaState();
-  const el = document.getElementById("gacha-collection");
-  if (!state.collection || state.collection.length === 0) {
-    el.style.display = "block";
-    el.style.gridTemplateColumns = "1fr";
-    el.innerHTML = `<div style="text-align:center;padding:24px;color:#94a3b8;font-family:'Space Mono',monospace;font-size:0.68rem;">Aucune carte encore.<br>Faites votre premier tirage !</div>`;
+  const today = new Date().toDateString();
+  let changed = false;
+  if (state.lastDaily !== today) {
+    state.draws = Math.min(MAX_DRAWS, state.draws + 1);
+    state.lastDaily = today; changed = true;
+  }
+  const kmGained = totalDist - (state.kmAtLastDraw || 0);
+  const walkDraws = Math.floor(kmGained / KM_PER_DRAW);
+  if (walkDraws > 0) {
+    state.draws = Math.min(MAX_DRAWS, state.draws + walkDraws);
+    state.kmAtLastDraw = (state.kmAtLastDraw || 0) + walkDraws * KM_PER_DRAW;
+    changed = true;
+  }
+  if (changed) saveGachaState(state);
+  updateGachaButtons(state.draws, (state.collection||[]).length);
+  return state;
+}
+
+function updateGachaButtons(draws, collCount) {
+  const dc = document.getElementById("btn-draws-count");
+  const cc = document.getElementById("btn-collection-count");
+  const dot = document.getElementById("btn-draw-dot");
+  if (dc) dc.textContent = draws;
+  if (cc) cc.textContent = collCount;
+  if (dot) dot.style.display = draws > 0 ? "inline-block" : "none";
+}
+
+function rollRarity() {
+  const total = Object.values(RARITY_WEIGHTS).reduce((a,b)=>a+b,0);
+  let r = Math.random() * total;
+  for (const [rarity, w] of Object.entries(RARITY_WEIGHTS)) {
+    r -= w; if (r <= 0) return rarity;
+  }
+  return "common";
+}
+function drawCity(rarity) {
+  const pool = GACHA_CITIES.filter(c => c.rarity === rarity);
+  return pool[Math.floor(Math.random() * pool.length)];
+}
+
+// ── GLOBE RENDERER ────────────────────────────────────────────────────
+let globeRaf = null;
+let globeState = { lon0:10, lat0:20, phase:'idle', spinSpeed:0.35,
+                   targetLon:null, targetLat:null, drawnCity:null,
+                   zoomT:0, zoomScale:1 };
+
+const LAND_POLYS = [
+  // France
+  [[48.4,2.5],[51.1,2.5],[51.5,4.5],[50.8,6.2],[49.5,8.2],[47.6,7.6],[46.4,6.8],
+   [45.9,7.1],[43.8,7.7],[43.3,5.1],[42.4,3.1],[42.7,1.8],[43.3,-1.8],[47.5,-2.2],
+   [48.7,-1.5],[49.7,-0.2],[50.9,1.7],[51.1,2.5]],
+  // Iberia
+  [[43.8,-9],[43.8,3.3],[40.0,3.2],[38.0,-0.5],[36.0,-5.5],[36.2,-8.8],[38.0,-9.5],[43.8,-9]],
+  // UK
+  [[51.5,-6],[58.6,-5],[60.8,-0.5],[58.0,2.0],[53.5,2.0],[50.0,2.0],[50.2,-5.5],[52.0,-5],[51.5,-6]],
+  // Central Europe
+  [[51.5,6],[54.5,8],[55.0,15],[48.5,17],[46.5,9],[47.5,7.6],[50.0,6],[51.5,6]],
+  // Italy
+  [[44.0,7.5],[46.5,13.5],[46.0,15],[40.7,16],[38.0,16],[37.5,15],[38.0,13],[40.5,14.5],[44.0,12.5],[44.0,7.5]],
+  // Scandinavia
+  [[55.0,8],[58.0,5],[62.0,5],[71.5,25],[69.0,30],[65.0,26],[60.0,25],[55.0,13],[55.0,8]],
+  // North Africa
+  [[35.5,-6],[37.0,10],[32.0,13],[30.0,32],[22.0,37],[20.0,20],[20.0,-17],[27.0,-13],[35.5,-6]],
+];
+
+function globeProject(lat, lon, lon0, lat0, R) {
+  const dLon = (lon - lon0) * Math.PI/180;
+  const latR = lat * Math.PI/180, lat0R = lat0 * Math.PI/180;
+  const x = R * Math.cos(latR) * Math.sin(dLon);
+  const y = R * (Math.sin(latR)*Math.cos(lat0R) - Math.cos(latR)*Math.cos(dLon)*Math.sin(lat0R));
+  const z = Math.sin(latR)*Math.sin(lat0R) + Math.cos(latR)*Math.cos(dLon)*Math.cos(lat0R);
+  return { x, y, z };
+}
+
+function drawGlobeFrame() {
+  const canvas = document.getElementById("globe-canvas");
+  if (!canvas) return;
+  const ctx = canvas.getContext("2d");
+  const W = canvas.width, CX = W/2, CY = W/2;
+  const gs = globeState;
+  const zoom = gs.zoomScale;
+  const R = (W/2 - 4) * zoom;
+
+  ctx.clearRect(0,0,W,W);
+
+  // Atmosphere
+  const atm = ctx.createRadialGradient(CX,CY,R*0.88,CX,CY,R*1.18);
+  atm.addColorStop(0,'rgba(37,99,235,0)');
+  atm.addColorStop(1,'rgba(56,132,255,0.22)');
+  ctx.fillStyle = atm; ctx.beginPath(); ctx.arc(CX,CY,R*1.18,0,Math.PI*2); ctx.fill();
+
+  // Clip to sphere
+  ctx.save(); ctx.beginPath(); ctx.arc(CX,CY,R,0,Math.PI*2); ctx.clip();
+
+  // Ocean
+  const ocean = ctx.createRadialGradient(CX-R*0.2,CY-R*0.25,0,CX,CY,R);
+  ocean.addColorStop(0,'#1a3a72'); ocean.addColorStop(1,'#080f2e');
+  ctx.fillStyle = ocean; ctx.fillRect(0,0,W,W);
+
+  // Grid
+  ctx.strokeStyle='rgba(80,120,255,0.07)'; ctx.lineWidth=0.6;
+  for(let lat=-60;lat<=60;lat+=30){
+    let first=true;
+    ctx.beginPath();
+    for(let lo=-180;lo<=180;lo+=4){
+      const p=globeProject(lat,lo,gs.lon0,gs.lat0,R);
+      if(p.z>0){first?ctx.moveTo(CX+p.x,CY-p.y):ctx.lineTo(CX+p.x,CY-p.y);first=false;}
+      else first=true;
+    }
+    ctx.stroke();
+  }
+  for(let lo=-180;lo<180;lo+=30){
+    let first=true; ctx.beginPath();
+    for(let la=-80;la<=80;la+=4){
+      const p=globeProject(la,lo,gs.lon0,gs.lat0,R);
+      if(p.z>0){first?ctx.moveTo(CX+p.x,CY-p.y):ctx.lineTo(CX+p.x,CY-p.y);first=false;}
+      else first=true;
+    }
+    ctx.stroke();
+  }
+
+  // Land
+  for(const poly of LAND_POLYS){
+    const pts=poly.map(([la,lo])=>globeProject(la,lo,gs.lon0,gs.lat0,R));
+    let started=false; ctx.beginPath();
+    for(const p of pts){
+      if(!p||p.z<=0){started=false;continue;}
+      if(!started){ctx.moveTo(CX+p.x,CY-p.y);started=true;}
+      else ctx.lineTo(CX+p.x,CY-p.y);
+    }
+    ctx.closePath();
+    ctx.fillStyle='#1e5c33'; ctx.fill();
+    ctx.strokeStyle='rgba(60,200,100,0.2)'; ctx.lineWidth=0.7; ctx.stroke();
+  }
+
+  // Cities dots
+  for(const city of GACHA_CITIES){
+    const p=globeProject(city.lat,city.lon,gs.lon0,gs.lat0,R);
+    if(!p||p.z<=0) continue;
+    const isTarget = gs.drawnCity && city.name===gs.drawnCity.name;
+    ctx.beginPath();
+    ctx.arc(CX+p.x,CY-p.y,isTarget?5:2.5,0,Math.PI*2);
+    ctx.fillStyle = isTarget ? '#fbbf24' : 'rgba(255,255,255,0.5)';
+    ctx.fill();
+    if(isTarget&&gs.phase==='zooming'){
+      ctx.strokeStyle='rgba(251,191,36,0.5)'; ctx.lineWidth=1.5;
+      ctx.beginPath(); ctx.arc(CX+p.x,CY-p.y,5+gs.zoomT*14,0,Math.PI*2); ctx.stroke();
+    }
+    if(isTarget&&gs.phase==='zooming'&&gs.zoomT>0.3){
+      ctx.fillStyle='rgba(255,255,255,0.9)';
+      ctx.font=`bold 11px 'Space Mono',monospace`;
+      ctx.textAlign='center';
+      ctx.fillText(city.name, CX+p.x, CY-p.y-10);
+    }
+  }
+
+  ctx.restore();
+
+  // Specular
+  const spec=ctx.createRadialGradient(CX-R*0.3,CY-R*0.38,0,CX,CY,R);
+  spec.addColorStop(0,'rgba(255,255,255,0.13)'); spec.addColorStop(0.45,'rgba(255,255,255,0)');
+  ctx.save(); ctx.beginPath(); ctx.arc(CX,CY,R,0,Math.PI*2); ctx.clip();
+  ctx.fillStyle=spec; ctx.fillRect(0,0,W,W); ctx.restore();
+
+  // Rim
+  ctx.strokeStyle='rgba(100,160,255,0.25)'; ctx.lineWidth=1.2;
+  ctx.beginPath(); ctx.arc(CX,CY,R,0,Math.PI*2); ctx.stroke();
+}
+
+function globeLoop() {
+  const gs = globeState;
+  if(gs.phase==='idle'){
+    gs.lon0=(gs.lon0+gs.spinSpeed)%360;
+    drawGlobeFrame();
+  } else if(gs.phase==='spinning'){
+    const diff=((gs.targetLon-gs.lon0+540)%360)-180;
+    const latDiff=(gs.targetLat-gs.lat0)*0.04;
+    gs.lat0+=latDiff;
+    if(Math.abs(diff)<0.6&&Math.abs(latDiff)<0.05){
+      gs.lon0=gs.targetLon; gs.lat0=gs.targetLat; gs.phase='zooming'; gs.zoomT=0;
+    } else {
+      const spd=Math.max(0.4,Math.abs(diff)*0.07);
+      gs.lon0=(gs.lon0+Math.sign(diff)*Math.min(spd,Math.abs(diff)))%360;
+    }
+    drawGlobeFrame();
+  } else if(gs.phase==='zooming'){
+    gs.zoomT=Math.min(1,gs.zoomT+0.018);
+    const ez=gs.zoomT<0.5?2*gs.zoomT*gs.zoomT:-1+(4-2*gs.zoomT)*gs.zoomT;
+    gs.zoomScale=1+ez*1.8;
+    drawGlobeFrame();
+    if(gs.zoomT>=1){ gs.phase='done'; showGachaReveal(); }
+  } else {
+    drawGlobeFrame();
+  }
+  globeRaf=requestAnimationFrame(globeLoop);
+}
+
+function makeStars() {
+  const el=document.getElementById("globe-stars"); if(!el) return;
+  el.innerHTML='';
+  for(let i=0;i<80;i++){
+    const s=document.createElement('div');
+    const size=Math.random()<0.3?2:1;
+    s.style.cssText=`position:absolute;width:${size}px;height:${size}px;border-radius:50%;
+      background:rgba(255,255,255,${0.3+Math.random()*0.7});
+      left:${Math.random()*100}%;top:${Math.random()*100}%;
+      animation:star-twinkle ${2+Math.random()*3}s ease-in-out infinite;
+      animation-delay:${Math.random()*3}s;`;
+    el.appendChild(s);
+  }
+}
+
+function renderGlobeTokens(draws) {
+  const el=document.getElementById("globe-tokens"); if(!el) return;
+  el.innerHTML=Array.from({length:MAX_DRAWS},(_,i)=>
+    `<div style="width:11px;height:11px;border-radius:50%;background:${i<draws?'#2563eb':'rgba(255,255,255,0.15)'};transition:all 0.3s;"></div>`
+  ).join('');
+}
+
+function renderGlobeNextInfo(state) {
+  const el=document.getElementById("globe-next-info"); if(!el) return;
+  const today=new Date().toDateString();
+  const kmLeft=KM_PER_DRAW-((totalDist-(state.kmAtLastDraw||0))%KM_PER_DRAW);
+  const parts=[];
+  if(state.lastDaily!==today) parts.push("🌅 Tirage quotidien disponible !");
+  else parts.push("🌅 Prochain quotidien demain");
+  parts.push(`🚶 +1 tirage dans ${kmLeft.toFixed(1)} km`);
+  el.innerHTML=parts.join('<br>');
+}
+
+// ── DRAW SCREEN open/close ────────────────────────────────────────────
+function openDrawScreen() {
+  const state=refreshGachaDraws();
+  makeStars();
+  renderGlobeTokens(state.draws);
+  renderGlobeNextInfo(state);
+  const btn=document.getElementById("globe-draw-btn");
+  if(btn){ btn.disabled=state.draws<=0; btn.style.opacity=state.draws>0?'1':'0.5'; }
+  const ds=document.getElementById("draw-screen");
+  if(ds){ ds.style.display='flex'; }
+  globeState.phase='idle'; globeState.zoomScale=1; globeState.drawnCity=null;
+  drawGlobeFrame();
+  if(globeRaf) cancelAnimationFrame(globeRaf);
+  globeRaf=requestAnimationFrame(globeLoop);
+}
+
+function closeDrawScreen() {
+  const ds=document.getElementById("draw-screen");
+  if(ds) ds.style.display='none';
+  if(globeRaf){ cancelAnimationFrame(globeRaf); globeRaf=null; }
+}
+
+// ── GLOBE DRAW ────────────────────────────────────────────────────────
+function globeDraw() {
+  const state=loadGachaState();
+  if(state.draws<=0) return;
+
+  // Roll city
+  const rarity=rollRarity();
+  const city=drawCity(rarity);
+
+  // Check if new
+  const isNew=!(state.collection||[]).some(c=>c.name===city.name&&c.rarity===city.rarity);
+
+  // Consume draw & save
+  state.draws--;
+  state.collection=state.collection||[];
+  state.collection.push(city);
+  saveGachaState(state);
+  updateGachaButtons(state.draws,(state.collection||[]).length);
+
+  // Disable btn
+  const btn=document.getElementById("globe-draw-btn");
+  if(btn){ btn.disabled=true; btn.style.opacity='0.5'; }
+  document.getElementById("globe-status").textContent=`Recherche de ${city.name}…`;
+
+  // Spin to city
+  globeState.drawnCity=city;
+  globeState.targetLon=city.lon;
+  globeState.targetLat=Math.max(-40,Math.min(40,city.lat*0.7));
+  globeState.phase='spinning';
+
+  // Save for reveal
+  globeState.pendingCity=city;
+  globeState.pendingIsNew=isNew;
+}
+
+// ── REVEAL ────────────────────────────────────────────────────────────
+function emitRevealParticles(isNew) {
+  const cont=document.getElementById("reveal-particles"); if(!cont) return;
+  const color=isNew?'#fbbf24':'#94a3b8';
+  const count=isNew?28:12;
+  for(let i=0;i<count;i++){
+    const el=document.createElement('div');
+    const angle=(Math.PI*2/count)*i+Math.random()*0.4;
+    const dist=60+Math.random()*80;
+    const size=isNew?5+Math.random()*4:3+Math.random()*2;
+    el.style.cssText=`position:absolute;left:50%;top:50%;width:${size}px;height:${size}px;
+      border-radius:50%;background:${color};
+      transform:translate(-50%,-50%);
+      animation:spark-out 1s ease-out ${Math.random()*0.3}s forwards;
+      --dx:${Math.cos(angle)*dist}px;--dy:${Math.sin(angle)*dist}px;`;
+    cont.appendChild(el);
+    setTimeout(()=>el.remove(),1500);
+  }
+}
+
+function showGachaReveal() {
+  const city=globeState.pendingCity;
+  const isNew=globeState.pendingIsNew;
+  if(!city) return;
+  document.getElementById("globe-status").textContent='';
+
+  const overlay=document.getElementById("draw-overlay");
+  const cardWrap=document.getElementById("reveal-card-wrap");
+  const label=document.getElementById("reveal-label");
+  const closeBtn=document.getElementById("reveal-close-btn");
+
+  // Build card HTML
+  cardWrap.innerHTML=buildCard(city,true);
+  label.textContent=isNew?'✨ Nouvelle ville découverte !':'Doublon · déjà dans ta collection';
+
+  overlay.style.display='flex';
+  // Fade in background
+  requestAnimationFrame(()=>{
+    overlay.style.background=isNew?'rgba(0,0,0,0.82)':'rgba(0,0,0,0.7)';
+    requestAnimationFrame(()=>{
+      cardWrap.style.transform='rotateY(0deg) scale(1)';
+      cardWrap.style.opacity='1';
+      label.style.color=isNew?'rgba(251,191,36,0.9)':'rgba(148,163,184,0.8)';
+      closeBtn.style.opacity='1';
+    });
+  });
+
+  setTimeout(()=>emitRevealParticles(isNew),200);
+  showToast(RARITY_STARS[city.rarity],`${city.name} — ${RARITY_LABELS[city.rarity]} !`);
+}
+
+function closeReveal() {
+  const overlay=document.getElementById("draw-overlay");
+  const cardWrap=document.getElementById("reveal-card-wrap");
+  const label=document.getElementById("reveal-label");
+  const closeBtn=document.getElementById("reveal-close-btn");
+
+  overlay.style.background='rgba(0,0,0,0)';
+  cardWrap.style.transform='rotateY(90deg) scale(0.8)';
+  cardWrap.style.opacity='0';
+  label.style.color='rgba(255,255,255,0)';
+  closeBtn.style.opacity='0';
+
+  setTimeout(()=>{
+    overlay.style.display='none';
+    // Reset globe
+    globeState.phase='idle'; globeState.zoomScale=1; globeState.drawnCity=null;
+    const state=refreshGachaDraws();
+    renderGlobeTokens(state.draws);
+    renderGlobeNextInfo(state);
+    const btn=document.getElementById("globe-draw-btn");
+    if(btn){ btn.disabled=state.draws<=0; btn.style.opacity=state.draws>0?'1':'0.5'; }
+    document.getElementById("globe-status").textContent='';
+  },500);
+}
+
+// ── COLLECTION SCREEN ─────────────────────────────────────────────────
+function openCollectionScreen() {
+  renderCollectionContent();
+  const cs=document.getElementById("collection-screen");
+  if(cs) cs.style.display='flex';
+}
+function closeCollectionScreen() {
+  const cs=document.getElementById("collection-screen");
+  if(cs) cs.style.display='none';
+}
+
+function renderCollectionContent() {
+  const state=loadGachaState();
+  const el=document.getElementById("collection-content"); if(!el) return;
+  if(!state.collection||state.collection.length===0){
+    el.style.gridTemplateColumns='1fr';
+    el.innerHTML=`<div style="grid-column:1/-1;text-align:center;padding:40px 20px;color:#94a3b8;font-family:'Space Mono',monospace;font-size:0.7rem;">
+      Aucune carte encore.<br>Lance un tirage pour commencer !
+    </div>`;
     return;
   }
-  el.style.display = "grid";
-  el.style.gridTemplateColumns = "repeat(3,1fr)";
-  const order = {legendary:0,epic:1,rare:2,common:3};
-  // Deduplicate: group by name+rarity, count copies
-  const counts = {};
-  const unique = [];
-  for (const city of state.collection) {
-    const key = city.name + "|" + city.rarity;
-    if (!counts[key]) { counts[key] = 0; unique.push(city); }
+  el.style.gridTemplateColumns='repeat(3,1fr)';
+  const order={legendary:0,epic:1,rare:2,common:3};
+  // Deduplicate
+  const counts={};
+  const unique=[];
+  for(const city of state.collection){
+    const key=city.name+'|'+city.rarity;
+    if(!counts[key]){counts[key]=0;unique.push(city);}
     counts[key]++;
   }
-  unique.sort((a,b) => order[a.rarity]-order[b.rarity] || a.name.localeCompare(b.name));
-  el.innerHTML = unique.map(city => {
-    const key = city.name + "|" + city.rarity;
-    const count = counts[key];
-    const mini = buildCard(city, false);
-    const badge = count > 1
-      ? `<div style="position:absolute;top:4px;right:4px;background:#1e293b;color:#fff;border-radius:99px;font-size:0.5rem;font-family:'Space Mono',monospace;padding:1px 5px;line-height:1.4;">x${count}</div>`
-      : "";
+  unique.sort((a,b)=>order[a.rarity]-order[b.rarity]||a.name.localeCompare(b.name));
+  el.innerHTML=unique.map(city=>{
+    const key=city.name+'|'+city.rarity;
+    const count=counts[key];
+    const mini=buildCard(city,false);
+    const badge=count>1?`<div style="position:absolute;top:4px;right:4px;background:#1e293b;color:#fff;border-radius:99px;font-size:0.5rem;font-family:'Space Mono',monospace;padding:1px 5px;line-height:1.4;">x${count}</div>`:'';
     return `<div style="position:relative;" onclick="showCardDetail(${JSON.stringify(city).replace(/"/g,'&quot;')})">${mini}${badge}</div>`;
-  }).join("");
+  }).join('');
 }
 
 function showCardDetail(city) {
-  const overlay = document.getElementById("gacha-overlay");
-  overlay.style.display = "flex";
-  document.getElementById("gacha-overlay-card").innerHTML = buildCard(city, true);
-  overlay.onclick = (e) => { if (e.target === overlay) overlay.style.display = "none"; };
+  const overlay=document.getElementById("gacha-overlay");
+  overlay.style.display='flex';
+  document.getElementById("gacha-overlay-card").innerHTML=buildCard(city,true);
+  overlay.onclick=(e)=>{if(e.target===overlay)overlay.style.display='none';};
 }
 
-// Open gacha panel
-function openGachaPanel() {
-  const state = refreshGachaDraws();
-  renderTokens(state.draws);
-  renderNextInfo(state);
-  document.getElementById("gacha-draw-btn").disabled = state.draws <= 0;
-  document.getElementById("gacha-draw-btn").style.opacity = state.draws > 0 ? "1" : "0.5";
-  document.getElementById("gacha-reveal").style.display = "none";
-  renderGachaCollection();
-  document.getElementById("gacha-panel").style.display = "flex";
-}
-
-// DRAW
-document.getElementById("gacha-chip").addEventListener("click", openGachaPanel);
-document.getElementById("gacha-close").addEventListener("click", () => {
-  document.getElementById("gacha-panel").style.display = "none";
-});
-
-function gachaDraw() {
-  const state = loadGachaState();
-  if (state.draws <= 0) return;
-
-  // Consume draw
-  state.draws--;
-  saveGachaState(state);
-
-  // Roll
-  const rarity = rollRarity();
-  const city = drawCity(rarity);
-
-  // Add to collection (allow duplicates — comme un vrai gacha)
-  state.collection = state.collection || [];
-  state.collection.push(city);
-  saveGachaState(state);
-
-  // Show overlay reveal
-  const overlay = document.getElementById("gacha-overlay");
-  overlay.style.display = "flex";
-  document.getElementById("gacha-overlay-card").innerHTML = buildCard(city, true);
-  overlay.onclick = (e) => {
-    if (e.target === overlay) {
-      overlay.style.display = "none";
-      // Refresh panel
-      const s2 = refreshGachaDraws();
-      renderTokens(s2.draws);
-      renderNextInfo(s2);
-      document.getElementById("gacha-draw-btn").disabled = s2.draws <= 0;
-      document.getElementById("gacha-draw-btn").style.opacity = s2.draws > 0 ? "1" : "0.5";
-      renderGachaCollection();
-    }
-  };
-
-  updateGachaChip(state.draws);
-  showToast(RARITY_STARS[rarity], `${city.name} — ${RARITY_LABELS[rarity]} !`);
-}
-// draw button uses onclick in HTML
-
-document.getElementById("gacha-reveal-close").addEventListener("click", () => {
-  document.getElementById("gacha-overlay").style.display = "none";
-  const s2 = refreshGachaDraws();
-  renderTokens(s2.draws);
-  renderNextInfo(s2);
-  document.getElementById("gacha-draw-btn").disabled = s2.draws <= 0;
-  document.getElementById("gacha-draw-btn").style.opacity = s2.draws > 0 ? "1" : "0.5";
-  renderGachaCollection();
-});
-
-// Bonus card quand on complète 100% d'une ville
+// ── COMPLETION CARD ───────────────────────────────────────────────────
 function grantCityCompletionCard(cityName) {
-  const match = GACHA_CITIES.find(c => c.name.toLowerCase() === cityName.toLowerCase());
-  if (!match) return;
-  const state = loadGachaState();
-  state.collection = state.collection || [];
-  // Ajouter avec marqueur special
-  const specialCard = { ...match, rarity:"legendary", special:true };
+  const match=GACHA_CITIES.find(c=>c.name.toLowerCase()===cityName.toLowerCase());
+  if(!match) return;
+  const state=loadGachaState();
+  state.collection=state.collection||[];
+  const specialCard={...match,rarity:"legendary",special:true};
   state.collection.push(specialCard);
   saveGachaState(state);
-  // Reveal
-  const overlay = document.getElementById("gacha-overlay");
-  overlay.style.display = "flex";
-  const cardHtml = buildCard(specialCard, true);
-  document.getElementById("gacha-overlay-card").innerHTML =
-    `<div style="text-align:center;margin-bottom:12px;font-family:'Space Mono',monospace;font-size:0.7rem;color:#fff;">✨ Ville complétée à 100% !</div>` + cardHtml;
-  overlay.onclick = (e) => { if (e.target === overlay) overlay.style.display = "none"; };
-  showToast("✨", `Carte spéciale ${cityName} débloquée !`);
+  updateGachaButtons(state.draws,(state.collection||[]).length);
+  const overlay=document.getElementById("gacha-overlay");
+  overlay.style.display='flex';
+  document.getElementById("gacha-overlay-card").innerHTML=
+    `<div style="text-align:center;margin-bottom:12px;font-family:'Space Mono',monospace;font-size:0.7rem;color:#fff;">✨ Ville complétée à 100% !</div>`+buildCard(specialCard,true);
+  overlay.onclick=(e)=>{if(e.target===overlay)overlay.style.display='none';};
+  showToast("✨",`Carte spéciale ${cityName} débloquée !`);
 }
 
-// Init gacha au démarrage
+// Init
 refreshGachaDraws();
+
 
 // ── SERVICE WORKER ────────────────────────────────────────────────────
 if ("serviceWorker" in navigator) {
