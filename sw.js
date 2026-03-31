@@ -1,5 +1,5 @@
 // Tabito Service Worker
-const CACHE_NAME = "tabito-v1";
+const CACHE_NAME = "tabito-v3";
 
 // Assets to cache on install (app shell)
 const PRECACHE = [
